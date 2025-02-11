@@ -1,0 +1,24 @@
+services:
+  kodus-service-analytics:
+    platform: linux/amd64
+    container_name: kodus-service-analytics
+    build:
+      context: .
+      dockerfile: DockerFiles/Dockerfile.dev
+    ports:
+      - "${PORT}:${PORT}"
+      - "9229:9229"
+    env_file:
+      - .env
+    restart: unless-stopped
+    volumes:
+      - .:/usr/src/app:delegated
+    networks:
+      - kodus-backend-services
+      - shared-network
+
+networks:
+  kodus-backend-services:
+    external: true
+  shared-network:
+    external: true
