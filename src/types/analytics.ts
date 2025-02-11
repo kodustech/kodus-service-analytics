@@ -1,3 +1,10 @@
+// Constantes para as tabelas
+export const TABLES = {
+  PULL_REQUESTS: "pullRequests",
+  DEPLOYMENTS: "deployments",
+  ISSUES: "issues",
+} as const;
+
 export interface QueryParams {
   organizationId: string;
   startDate: string;
@@ -70,4 +77,4 @@ export interface DeveloperActivityData {
   date: string;
   commitCount: number;
   prCount: number;
-} 
+}

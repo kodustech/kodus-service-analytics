@@ -4,8 +4,10 @@ import helmet from "helmet";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
 import { errorHandler } from "./middleware/errorHandler";
-import { analyticsRoutes } from "./routes/analytics.routes";
+import { analyticsRoutes } from "./routes/index";
 import { logger } from "./utils/logger";
+import swaggerUi from 'swagger-ui-express';
+import { swaggerSpec } from './config/swagger';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -22,10 +24,11 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// Routes
+// Swagger docs route should come before API routes
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
 app.use("/api", analyticsRoutes);
 
-// Error handling
 app.use(errorHandler);
 
 app.listen(port, () => {
