@@ -7,7 +7,10 @@ import {
   PullRequestsByDevChartData,
   PullRequestSizeMetrics,
   PullRequestsOpenedVsClosedData,
+  DeployFrequencyHighlight,
   TABLES,
+  LeadTimeHighlight,
+  PRSizeHighlight,
 } from "../../types/analytics";
 import { AppError } from "../../middleware/errorHandler";
 
@@ -56,7 +59,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
     organizationId: string,
     startDate: string,
     endDate: string
-  ): Promise<number> {
+  ): Promise<DeployFrequencyHighlight> {
     // Validação do formato das datas
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
     if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
@@ -65,78 +68,203 @@ export class DeveloperProductivityService extends BigQueryBaseService {
 
     const pullRequestsTable = this.getTablePath("MONGO", TABLES.PULL_REQUESTS);
 
+    // Calculate the duration of the current period
+    const currentStartDate = new Date(startDate);
+    const currentEndDate = new Date(endDate);
+    const periodDurationMs = currentEndDate.getTime() - currentStartDate.getTime();
+    const periodDurationWeeks = periodDurationMs / (7 * 24 * 60 * 60 * 1000);
+    
+    // Calculate the previous period dates
+    const previousEndDate = new Date(currentStartDate);
+    previousEndDate.setDate(previousEndDate.getDate() - 1); // Subtract 1 day to not overlap
+    const previousStartDate = new Date(previousEndDate);
+    previousStartDate.setTime(previousEndDate.getTime() - periodDurationMs);
+
     const query = `
-        WITH weekly_deploys AS (
-            SELECT
-                DATE_TRUNC(TIMESTAMP(closedAt), WEEK) AS week_start,
-                COUNT(*) AS pr_count
-            FROM ${pullRequestsTable}
-            WHERE 1=1
-                AND closedAt IS NOT NULL
-                AND status = 'closed'
-                AND TIMESTAMP(closedAt) >= TIMESTAMP(@startDate)
-                AND TIMESTAMP(closedAt) <= TIMESTAMP(@endDate)
-                AND organizationId = @organizationId
-            GROUP BY week_start
-        )
+      WITH current_period AS (
         SELECT
-            ROUND(AVG(pr_count), 2) AS deploy_frequency
-        FROM weekly_deploys;
+          COUNT(*) as total_deployments,
+          SAFE_DIVIDE(COUNT(*), ${periodDurationWeeks}) as avg_per_week
+        FROM ${pullRequestsTable}
+        WHERE closedAt IS NOT NULL
+          AND status = 'closed'
+          AND TIMESTAMP(closedAt) BETWEEN TIMESTAMP(@currentStartDate) AND TIMESTAMP(@currentEndDate)
+          AND organizationId = @organizationId
+      ),
+      previous_period AS (
+        SELECT
+          COUNT(*) as total_deployments,
+          SAFE_DIVIDE(COUNT(*), ${periodDurationWeeks}) as avg_per_week
+        FROM ${pullRequestsTable}
+        WHERE closedAt IS NOT NULL
+          AND status = 'closed'
+          AND TIMESTAMP(closedAt) BETWEEN TIMESTAMP(@previousStartDate) AND TIMESTAMP(@previousEndDate)
+          AND organizationId = @organizationId
+      )
+      SELECT
+        c.total_deployments as current_total_deployments,
+        c.avg_per_week as current_avg_per_week,
+        p.total_deployments as previous_total_deployments,
+        p.avg_per_week as previous_avg_per_week
+      FROM current_period c
+      CROSS JOIN previous_period p;
     `;
 
     const rows = await this.executeQuery(query, {
-      startDate,
-      endDate,
+      currentStartDate: startDate,
+      currentEndDate: endDate,
+      previousStartDate: previousStartDate.toISOString().split('T')[0],
+      previousEndDate: previousEndDate.toISOString().split('T')[0],
       organizationId,
     });
 
-    if (!rows || rows.length === 0) {
-      return 0;
+    const result = rows[0] || {
+      current_total_deployments: 0,
+      current_avg_per_week: 0,
+      previous_total_deployments: 0,
+      previous_avg_per_week: 0,
+    };
+
+    const currentAvg = Number(result.current_avg_per_week.toFixed(2));
+    const previousAvg = Number(result.previous_avg_per_week.toFixed(2));
+    
+    // Calculate percentage change and trend
+    let percentageChange = 0;
+    let trend: 'improved' | 'worsened' | 'unchanged' = 'unchanged';
+    
+    if (previousAvg > 0) {
+      percentageChange = Number((((currentAvg - previousAvg) / previousAvg) * 100).toFixed(2));
+      // For deploy frequency, an increase is an improvement
+      if (percentageChange > 0) {
+        trend = 'improved';
+      } else if (percentageChange < 0) {
+        trend = 'worsened';
+      }
+    } else if (currentAvg > 0) {
+      percentageChange = 100;
+      trend = 'improved';
     }
 
-    const result = rows[0]?.deploy_frequency;
-    return result === null || result === undefined ? 0 : Number(result);
+    return {
+      currentPeriod: {
+        totalDeployments: Number(result.current_total_deployments),
+        averagePerWeek: currentAvg,
+      },
+      previousPeriod: {
+        totalDeployments: Number(result.previous_total_deployments),
+        averagePerWeek: previousAvg,
+      },
+      comparison: {
+        percentageChange,
+        trend,
+      },
+    };
   }
 
   async getPullRequestLeadTimeHighlight(
     organizationId: string,
     startDate: string,
     endDate: string
-  ): Promise<LeadTimeMetrics> {
+  ): Promise<LeadTimeHighlight> {
+    // Calculate the duration of the current period
+    const currentStartDate = new Date(startDate);
+    const currentEndDate = new Date(endDate);
+    const periodDurationMs = currentEndDate.getTime() - currentStartDate.getTime();
+    
+    // Calculate the previous period dates
+    const previousEndDate = new Date(currentStartDate);
+    previousEndDate.setDate(previousEndDate.getDate() - 1); // Subtract 1 day to not overlap
+    const previousStartDate = new Date(previousEndDate);
+    previousStartDate.setTime(previousEndDate.getTime() - periodDurationMs);
+
     const query = `
       WITH pr_lead_times AS (
         SELECT
-          pr._id AS pull_request_id,
-          TIMESTAMP_DIFF(TIMESTAMP(pr.closedAt), TIMESTAMP(MIN(JSON_VALUE(c.commit_timestamp))), MINUTE) AS lead_time_minutes
+          CASE
+            WHEN TIMESTAMP(pr.closedAt) BETWEEN TIMESTAMP(@currentStartDate) AND TIMESTAMP(@currentEndDate)
+            THEN 'current'
+            ELSE 'previous'
+          END as period,
+          TIMESTAMP_DIFF(
+            TIMESTAMP(pr.closedAt),
+            TIMESTAMP(MIN(JSON_VALUE(c.commit_timestamp))),
+            MINUTE
+          ) as lead_time_minutes
         FROM ${this.getTablePath("MONGO", "pullRequests")} AS pr
-        JOIN ${this.getTablePath(
-          "MONGO",
-          "commits_view"
-        )} AS c ON pr._id = c.pull_request_id
-        WHERE 1=1
-          AND pr.closedAt IS NOT NULL
+        JOIN ${this.getTablePath("MONGO", "commits_view")} AS c
+          ON pr._id = c.pull_request_id
+        WHERE pr.closedAt IS NOT NULL
           AND pr.status = 'closed'
-          AND TIMESTAMP(pr.closedAt) >= TIMESTAMP(@startDate)
-          AND TIMESTAMP(pr.closedAt) <= TIMESTAMP(@endDate)
+          AND TIMESTAMP(pr.closedAt) BETWEEN TIMESTAMP(@previousStartDate) AND TIMESTAMP(@currentEndDate)
           AND pr.organizationId = @organizationId
-        GROUP BY pr._id, pr.closedAt
+        GROUP BY pr._id, pr.closedAt, period
         HAVING COUNT(c.commit_hash) > 0
       )
       SELECT
-        APPROX_QUANTILES(lead_time_minutes, 100)[OFFSET(75)] AS lead_time_p75_minutes
-      FROM pr_lead_times;
+        COALESCE(
+          MAX(CASE WHEN period = 'current' THEN lead_time_p75 ELSE NULL END),
+          0
+        ) as current_lead_time_p75_minutes,
+        COALESCE(
+          MAX(CASE WHEN period = 'previous' THEN lead_time_p75 ELSE NULL END),
+          0
+        ) as previous_lead_time_p75_minutes
+      FROM (
+        SELECT
+          period,
+          APPROX_QUANTILES(lead_time_minutes, 100)[OFFSET(75)] as lead_time_p75
+        FROM pr_lead_times
+        GROUP BY period
+      );
     `;
 
     const rows = await this.executeQuery(query, {
+      currentStartDate: startDate,
+      currentEndDate: endDate,
+      previousStartDate: previousStartDate.toISOString().split('T')[0],
+      previousEndDate: previousEndDate.toISOString().split('T')[0],
       organizationId,
-      startDate,
-      endDate,
     });
 
-    const minutes = rows[0]?.lead_time_p75_minutes || 0;
+    const result = rows[0] || {
+      current_lead_time_p75_minutes: 0,
+      previous_lead_time_p75_minutes: 0,
+    };
+
+    // Ensure we have numeric values, defaulting to 0 if null/undefined
+    const currentMinutes = Number((result.current_lead_time_p75_minutes || 0).toFixed(2));
+    const previousMinutes = Number((result.previous_lead_time_p75_minutes || 0).toFixed(2));
+    
+    // Calculate percentage change and trend
+    let percentageChange = 0;
+    let trend: 'improved' | 'worsened' | 'unchanged' = 'unchanged';
+    
+    if (previousMinutes > 0) {
+      percentageChange = Number((((currentMinutes - previousMinutes) / previousMinutes) * 100).toFixed(2));
+      // For lead time, a decrease is an improvement
+      if (percentageChange < 0) {
+        trend = 'improved';
+      } else if (percentageChange > 0) {
+        trend = 'worsened';
+      }
+    } else if (currentMinutes > 0) {
+      percentageChange = 100;
+      trend = 'worsened';
+    }
+
     return {
-      leadTimeP75Minutes: Number(minutes.toFixed(2)),
-      leadTimeP75Hours: Number((minutes / 60).toFixed(2)),
+      currentPeriod: {
+        leadTimeP75Minutes: currentMinutes,
+        leadTimeP75Hours: Number((currentMinutes / 60).toFixed(2)),
+      },
+      previousPeriod: {
+        leadTimeP75Minutes: previousMinutes,
+        leadTimeP75Hours: Number((previousMinutes / 60).toFixed(2)),
+      },
+      comparison: {
+        percentageChange,
+        trend,
+      },
     };
   }
 
@@ -190,27 +318,98 @@ export class DeveloperProductivityService extends BigQueryBaseService {
     organizationId: string,
     startDate: string,
     endDate: string
-  ): Promise<PullRequestSizeMetrics> {
+  ): Promise<PRSizeHighlight> {
+    // Calculate the duration of the current period
+    const currentStartDate = new Date(startDate);
+    const currentEndDate = new Date(endDate);
+    const periodDurationMs = currentEndDate.getTime() - currentStartDate.getTime();
+    
+    // Calculate the previous period dates
+    const previousEndDate = new Date(currentStartDate);
+    previousEndDate.setDate(previousEndDate.getDate() - 1); // Subtract 1 day to not overlap
+    const previousStartDate = new Date(previousEndDate);
+    previousStartDate.setTime(previousEndDate.getTime() - periodDurationMs);
+
     const query = `
+      WITH pr_sizes AS (
+        SELECT
+          CASE
+            WHEN TIMESTAMP(pr.closedAt) BETWEEN TIMESTAMP(@currentStartDate) AND TIMESTAMP(@currentEndDate)
+            THEN 'current'
+            ELSE 'previous'
+          END as period,
+          pr.totalChanges as pr_size
+        FROM ${this.getTablePath("MONGO", "pullRequests")} AS pr
+        WHERE pr.closedAt IS NOT NULL
+          AND pr.status = 'closed'
+          AND TIMESTAMP(pr.closedAt) BETWEEN TIMESTAMP(@previousStartDate) AND TIMESTAMP(@currentEndDate)
+          AND pr.organizationId = @organizationId
+      )
       SELECT
-        SAFE_DIVIDE(SUM(pr.totalChanges), COUNT(pr._id)) AS avg_pr_size
-      FROM ${this.getTablePath("MONGO", "pullRequests")} AS pr
-      WHERE 1=1
-        AND pr.closedAt IS NOT NULL
-        AND pr.status = 'closed'
-        AND TIMESTAMP(pr.closedAt) >= TIMESTAMP(@startDate)
-        AND TIMESTAMP(pr.closedAt) <= TIMESTAMP(@endDate)
-        AND pr.organizationId = @organizationId;
+        period,
+        COUNT(*) as total_prs,
+        ROUND(AVG(pr_size), 2) as avg_pr_size
+      FROM pr_sizes
+      GROUP BY period;
     `;
 
     const rows = await this.executeQuery(query, {
+      currentStartDate: startDate,
+      currentEndDate: endDate,
+      previousStartDate: previousStartDate.toISOString().split('T')[0],
+      previousEndDate: previousEndDate.toISOString().split('T')[0],
       organizationId,
-      startDate,
-      endDate,
     });
 
+    // Initialize default values
+    let currentPeriod = {
+      averagePRSize: 0,
+      totalPRs: 0,
+    };
+    let previousPeriod = {
+      averagePRSize: 0,
+      totalPRs: 0,
+    };
+
+    // Process query results
+    rows.forEach(row => {
+      if (row.period === 'current') {
+        currentPeriod = {
+          averagePRSize: Number(row.avg_pr_size || 0),
+          totalPRs: Number(row.total_prs || 0),
+        };
+      } else {
+        previousPeriod = {
+          averagePRSize: Number(row.avg_pr_size || 0),
+          totalPRs: Number(row.total_prs || 0),
+        };
+      }
+    });
+
+    // Calculate percentage change and trend
+    let percentageChange = 0;
+    let trend: 'improved' | 'worsened' | 'unchanged' = 'unchanged';
+    
+    if (previousPeriod.averagePRSize > 0) {
+      percentageChange = Number((((currentPeriod.averagePRSize - previousPeriod.averagePRSize) / previousPeriod.averagePRSize) * 100).toFixed(2));
+      // For PR size, a decrease is an improvement (smaller PRs are better)
+      if (percentageChange < 0) {
+        trend = 'improved';
+      } else if (percentageChange > 0) {
+        trend = 'worsened';
+      }
+    } else if (currentPeriod.averagePRSize > 0) {
+      percentageChange = 100;
+      trend = 'worsened';
+    }
+
     return {
-      averagePRSize: Number((rows[0]?.avg_pr_size || 0).toFixed(2)),
+      currentPeriod,
+      previousPeriod,
+      comparison: {
+        percentageChange,
+        trend,
+      },
     };
   }
 

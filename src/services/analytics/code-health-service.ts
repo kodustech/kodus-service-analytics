@@ -9,6 +9,8 @@ import {
   PullRequestsOpenedVsClosedData,
   RepositorySuggestions,
   SuggestionCategoryCount,
+  BugRatioData,
+  BugRatioHighlight,
   TABLES,
 } from "../../types/analytics";
 import { AppError } from "../../middleware/errorHandler";
@@ -94,6 +96,165 @@ export class CodeHealthService extends BigQueryBaseService {
         count: Number(cat.count),
       })),
     }));
+  }
+
+  async getBugRatioData(params: {
+    organizationId: string;
+    startDate: string;
+    endDate: string;
+  }): Promise<BugRatioData[]> {
+    const pullRequestsTable = this.getTablePath("MONGO", TABLES.PULL_REQUESTS);
+    const prTypesTable = this.getTablePath("MONGO", "pull_request_types");
+
+    const query = `
+      WITH weekly_prs AS (
+        SELECT
+          TIMESTAMP_TRUNC(TIMESTAMP(pr.closedAt), WEEK) AS week_start,
+          COUNT(*) as total_prs,
+          COUNTIF(prt.type = 'Bug Fix') as bug_fix_prs,
+          SAFE_DIVIDE(COUNTIF(prt.type = 'Bug Fix'), COUNT(*)) as ratio
+        FROM ${pullRequestsTable} AS pr
+        LEFT JOIN ${prTypesTable} AS prt
+          ON pr._id = prt.pullRequestId
+        WHERE pr.closedAt IS NOT NULL
+          AND pr.status = 'closed'
+          AND TIMESTAMP(pr.closedAt) BETWEEN TIMESTAMP(@startDate) AND TIMESTAMP(@endDate)
+          AND pr.organizationId = @organizationId
+        GROUP BY week_start
+      )
+      SELECT
+        FORMAT_TIMESTAMP('%Y-%m-%d', week_start) as week_start,
+        total_prs,
+        bug_fix_prs,
+        ratio
+      FROM weekly_prs
+      ORDER BY week_start ASC;
+    `;
+
+    const rows = await this.executeQuery(query, {
+      startDate: params.startDate,
+      endDate: params.endDate,
+      organizationId: params.organizationId,
+    });
+
+    return rows.map((row) => ({
+      weekStart: row.week_start,
+      totalPRs: Number(row.total_prs),
+      bugFixPRs: Number(row.bug_fix_prs),
+      ratio: Number((row.ratio || 0).toFixed(2)),
+    }));
+  }
+
+  async getBugRatioHighlight(params: {
+    organizationId: string;
+    startDate: string;
+    endDate: string;
+  }): Promise<BugRatioHighlight> {
+    const pullRequestsTable = this.getTablePath("MONGO", TABLES.PULL_REQUESTS);
+    const prTypesTable = this.getTablePath("MONGO", "pull_request_types");
+
+    // Calculate the duration of the current period
+    const currentStartDate = new Date(params.startDate);
+    const currentEndDate = new Date(params.endDate);
+    const periodDurationMs = currentEndDate.getTime() - currentStartDate.getTime();
+    
+    // Calculate the previous period dates
+    const previousEndDate = new Date(currentStartDate);
+    previousEndDate.setDate(previousEndDate.getDate() - 1); // Subtract 1 day to not overlap
+    const previousStartDate = new Date(previousEndDate);
+    previousStartDate.setTime(previousEndDate.getTime() - periodDurationMs);
+
+    const query = `
+      WITH current_period AS (
+        SELECT
+          COUNT(*) as total_prs,
+          COUNTIF(prt.type = 'Bug Fix') as bug_fix_prs,
+          SAFE_DIVIDE(COUNTIF(prt.type = 'Bug Fix'), COUNT(*)) as ratio
+        FROM ${pullRequestsTable} AS pr
+        LEFT JOIN ${prTypesTable} AS prt
+          ON pr._id = prt.pullRequestId
+        WHERE pr.closedAt IS NOT NULL
+          AND pr.status = 'closed'
+          AND TIMESTAMP(pr.closedAt) BETWEEN TIMESTAMP(@currentStartDate) AND TIMESTAMP(@currentEndDate)
+          AND pr.organizationId = @organizationId
+      ),
+      previous_period AS (
+        SELECT
+          COUNT(*) as total_prs,
+          COUNTIF(prt.type = 'Bug Fix') as bug_fix_prs,
+          SAFE_DIVIDE(COUNTIF(prt.type = 'Bug Fix'), COUNT(*)) as ratio
+        FROM ${pullRequestsTable} AS pr
+        LEFT JOIN ${prTypesTable} AS prt
+          ON pr._id = prt.pullRequestId
+        WHERE pr.closedAt IS NOT NULL
+          AND pr.status = 'closed'
+          AND TIMESTAMP(pr.closedAt) BETWEEN TIMESTAMP(@previousStartDate) AND TIMESTAMP(@previousEndDate)
+          AND pr.organizationId = @organizationId
+      )
+      SELECT
+        c.total_prs as current_total_prs,
+        c.bug_fix_prs as current_bug_fix_prs,
+        c.ratio as current_ratio,
+        p.total_prs as previous_total_prs,
+        p.bug_fix_prs as previous_bug_fix_prs,
+        p.ratio as previous_ratio
+      FROM current_period c
+      CROSS JOIN previous_period p;
+    `;
+
+    const rows = await this.executeQuery(query, {
+      currentStartDate: params.startDate,
+      currentEndDate: params.endDate,
+      previousStartDate: previousStartDate.toISOString().split('T')[0],
+      previousEndDate: previousEndDate.toISOString().split('T')[0],
+      organizationId: params.organizationId,
+    });
+
+    const result = rows[0] || {
+      current_total_prs: 0,
+      current_bug_fix_prs: 0,
+      current_ratio: 0,
+      previous_total_prs: 0,
+      previous_bug_fix_prs: 0,
+      previous_ratio: 0,
+    };
+
+    const currentRatio = Number((result.current_ratio || 0).toFixed(2));
+    const previousRatio = Number((result.previous_ratio || 0).toFixed(2));
+    
+    // Calculate percentage change and trend
+    let percentageChange = 0;
+    let trend: 'improved' | 'worsened' | 'unchanged' = 'unchanged';
+    
+    if (previousRatio > 0) {
+      percentageChange = Number((((currentRatio - previousRatio) / previousRatio) * 100).toFixed(2));
+      // For bug ratio, a decrease is an improvement
+      if (percentageChange < 0) {
+        trend = 'improved';
+      } else if (percentageChange > 0) {
+        trend = 'worsened';
+      }
+    } else if (currentRatio > 0) {
+      percentageChange = 100;
+      trend = 'worsened';
+    }
+
+    return {
+      currentPeriod: {
+        totalPRs: Number(result.current_total_prs),
+        bugFixPRs: Number(result.current_bug_fix_prs),
+        ratio: currentRatio,
+      },
+      previousPeriod: {
+        totalPRs: Number(result.previous_total_prs),
+        bugFixPRs: Number(result.previous_bug_fix_prs),
+        ratio: previousRatio,
+      },
+      comparison: {
+        percentageChange,
+        trend,
+      },
+    };
   }
 }
 

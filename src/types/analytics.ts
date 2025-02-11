@@ -34,6 +34,21 @@ export interface LeadTimeMetrics {
   leadTimeP75Hours: number;
 }
 
+export interface LeadTimeHighlight {
+  currentPeriod: {
+    leadTimeP75Minutes: number;
+    leadTimeP75Hours: number;
+  };
+  previousPeriod: {
+    leadTimeP75Minutes: number;
+    leadTimeP75Hours: number;
+  };
+  comparison: {
+    percentageChange: number;
+    trend: 'improved' | 'worsened' | 'unchanged';
+  };
+}
+
 export interface LeadTimeChartData {
   weekStart: string;
   leadTimeP75Minutes: number;
@@ -58,6 +73,21 @@ export interface PullRequestSizeMetrics {
   averagePRSize: number;
 }
 
+export interface PRSizeHighlight {
+  currentPeriod: {
+    averagePRSize: number;
+    totalPRs: number;
+  };
+  previousPeriod: {
+    averagePRSize: number;
+    totalPRs: number;
+  };
+  comparison: {
+    percentageChange: number;
+    trend: 'improved' | 'worsened' | 'unchanged';
+  };
+}
+
 export interface PullRequestsByDevChartData {
   weekStart: string;
   author: string;
@@ -77,4 +107,43 @@ export interface DeveloperActivityData {
   date: string;
   commitCount: number;
   prCount: number;
+}
+
+export interface BugRatioData {
+  weekStart: string;
+  totalPRs: number;
+  bugFixPRs: number;
+  ratio: number;
+}
+
+export interface BugRatioHighlight {
+  currentPeriod: {
+    totalPRs: number;
+    bugFixPRs: number;
+    ratio: number;
+  };
+  previousPeriod: {
+    totalPRs: number;
+    bugFixPRs: number;
+    ratio: number;
+  };
+  comparison: {
+    percentageChange: number;
+    trend: 'improved' | 'worsened' | 'unchanged';
+  };
+}
+
+export interface DeployFrequencyHighlight {
+  currentPeriod: {
+    totalDeployments: number;
+    averagePerWeek: number;
+  };
+  previousPeriod: {
+    totalDeployments: number;
+    averagePerWeek: number;
+  };
+  comparison: {
+    percentageChange: number;
+    trend: 'improved' | 'worsened' | 'unchanged';
+  };
 }

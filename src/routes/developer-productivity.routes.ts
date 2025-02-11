@@ -95,7 +95,7 @@ router.get("/charts/deploy-frequency", async (req, res, next) => {
  * @swagger
  * /api/productivity/highlights/deploy-frequency:
  *   get:
- *     summary: Obtém os destaques da frequência de deploys
+ *     summary: Obtém a frequência de deploys com comparação ao período anterior
  *     tags: [Developer Productivity]
  *     security:
  *       - ApiKeyAuth: []
@@ -120,14 +120,46 @@ router.get("/charts/deploy-frequency", async (req, res, next) => {
  *         description: Data final (formato YYYY-MM-DD)
  *     responses:
  *       200:
- *         description: Métricas de destaque da frequência de deploys
+ *         description: Dados da frequência de deploys com comparação ao período anterior
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
- *                 deployFrequency:
+ *                 status:
+ *                   type: string
+ *                   example: "success"
+ *                 data:
  *                   type: object
+ *                   properties:
+ *                     currentPeriod:
+ *                       type: object
+ *                       properties:
+ *                         totalDeployments:
+ *                           type: number
+ *                           description: Total de deploys no período atual
+ *                         averagePerWeek:
+ *                           type: number
+ *                           description: Média de deploys por semana no período atual
+ *                     previousPeriod:
+ *                       type: object
+ *                       properties:
+ *                         totalDeployments:
+ *                           type: number
+ *                           description: Total de deploys no período anterior
+ *                         averagePerWeek:
+ *                           type: number
+ *                           description: Média de deploys por semana no período anterior
+ *                     comparison:
+ *                       type: object
+ *                       properties:
+ *                         percentageChange:
+ *                           type: number
+ *                           description: Variação percentual entre os períodos (positivo indica melhoria)
+ *                         trend:
+ *                           type: string
+ *                           enum: [improved, worsened, unchanged]
+ *                           description: Indica se o índice melhorou, piorou ou permaneceu igual
  *       401:
  *         description: Não autorizado - API key inválida ou ausente
  *       400:
@@ -142,20 +174,24 @@ router.get(
       const { organizationId, startDate, endDate } = req.query;
 
       if (!organizationId || !startDate || !endDate) {
-        return res.status(400).json({ error: "Missing required parameters" });
+        return res.status(400).json({
+          error: "Missing required parameters: organizationId, startDate, endDate",
+        });
       }
 
-      const deployFrequency =
-        await developerProductivityService.getDeployFrequencyHighlight(
-          organizationId as string,
-          startDate as string,
-          endDate as string
-        );
+      const data = await developerProductivityService.getDeployFrequencyHighlight(
+        organizationId as string,
+        startDate as string,
+        endDate as string
+      );
 
-      res.json({ deployFrequency });
+      return res.json({
+        status: "success",
+        data,
+      });
     } catch (error) {
       console.error("Error fetching deploy frequency highlight:", error);
-      res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({ error: "Internal server error" });
     }
   }
 );
@@ -164,7 +200,7 @@ router.get(
  * @swagger
  * /api/productivity/highlights/lead-time-for-change:
  *   get:
- *     summary: Obtém os destaques do lead time para mudanças
+ *     summary: Obtém o lead time para mudanças com comparação ao período anterior
  *     tags: [Developer Productivity]
  *     security:
  *       - ApiKeyAuth: []
@@ -189,16 +225,46 @@ router.get(
  *         description: Data final (formato YYYY-MM-DD)
  *     responses:
  *       200:
- *         description: Métricas de destaque do lead time
+ *         description: Dados do lead time com comparação ao período anterior
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
- *                 averageLeadTime:
- *                   type: number
- *                 totalPRs:
- *                   type: number
+ *                 status:
+ *                   type: string
+ *                   example: "success"
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     currentPeriod:
+ *                       type: object
+ *                       properties:
+ *                         leadTimeP75Minutes:
+ *                           type: number
+ *                           description: Lead time P75 em minutos no período atual
+ *                         leadTimeP75Hours:
+ *                           type: number
+ *                           description: Lead time P75 em horas no período atual
+ *                     previousPeriod:
+ *                       type: object
+ *                       properties:
+ *                         leadTimeP75Minutes:
+ *                           type: number
+ *                           description: Lead time P75 em minutos no período anterior
+ *                         leadTimeP75Hours:
+ *                           type: number
+ *                           description: Lead time P75 em horas no período anterior
+ *                     comparison:
+ *                       type: object
+ *                       properties:
+ *                         percentageChange:
+ *                           type: number
+ *                           description: Variação percentual entre os períodos (negativo indica melhoria)
+ *                         trend:
+ *                           type: string
+ *                           enum: [improved, worsened, unchanged]
+ *                           description: Indica se o índice melhorou, piorou ou permaneceu igual
  *       401:
  *         description: Não autorizado - API key inválida ou ausente
  *       400:
@@ -219,14 +285,16 @@ router.get(
         });
       }
 
-      const leadTimeMetrics =
-        await developerProductivityService.getPullRequestLeadTimeHighlight(
-          organizationId as string,
-          startDate as string,
-          endDate as string
-        );
+      const data = await developerProductivityService.getPullRequestLeadTimeHighlight(
+        organizationId as string,
+        startDate as string,
+        endDate as string
+      );
 
-      return res.json(leadTimeMetrics);
+      return res.json({
+        status: "success",
+        data,
+      });
     } catch (error) {
       console.error("Error fetching PR lead time:", error);
       return res.status(500).json({ error: "Internal server error" });
@@ -322,7 +390,7 @@ router.get(
  * @swagger
  * /api/productivity/highlights/pr-size:
  *   get:
- *     summary: Obtém os destaques do tamanho dos PRs
+ *     summary: Obtém o tamanho médio dos PRs com comparação ao período anterior
  *     tags: [Developer Productivity]
  *     security:
  *       - ApiKeyAuth: []
@@ -347,25 +415,46 @@ router.get(
  *         description: Data final (formato YYYY-MM-DD)
  *     responses:
  *       200:
- *         description: Métricas de destaque do tamanho dos PRs
+ *         description: Dados do tamanho médio dos PRs com comparação ao período anterior
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
- *                 averageSize:
- *                   type: number
- *                 totalPRs:
- *                   type: number
- *                 sizeDistribution:
+ *                 status:
+ *                   type: string
+ *                   example: "success"
+ *                 data:
  *                   type: object
  *                   properties:
- *                     small:
- *                       type: number
- *                     medium:
- *                       type: number
- *                     large:
- *                       type: number
+ *                     currentPeriod:
+ *                       type: object
+ *                       properties:
+ *                         averagePRSize:
+ *                           type: number
+ *                           description: Tamanho médio dos PRs no período atual
+ *                         totalPRs:
+ *                           type: number
+ *                           description: Total de PRs no período atual
+ *                     previousPeriod:
+ *                       type: object
+ *                       properties:
+ *                         averagePRSize:
+ *                           type: number
+ *                           description: Tamanho médio dos PRs no período anterior
+ *                         totalPRs:
+ *                           type: number
+ *                           description: Total de PRs no período anterior
+ *                     comparison:
+ *                       type: object
+ *                       properties:
+ *                         percentageChange:
+ *                           type: number
+ *                           description: Variação percentual entre os períodos (negativo indica melhoria)
+ *                         trend:
+ *                           type: string
+ *                           enum: [improved, worsened, unchanged]
+ *                           description: Indica se o índice melhorou, piorou ou permaneceu igual
  *       401:
  *         description: Não autorizado - API key inválida ou ausente
  *       400:
@@ -384,14 +473,16 @@ router.get("/highlights/pr-size", async (req: Request, res: Response) => {
       });
     }
 
-    const prSizeMetrics =
-      await developerProductivityService.getPullRequestSizeHighlight(
-        organizationId as string,
-        startDate as string,
-        endDate as string
-      );
+    const data = await developerProductivityService.getPullRequestSizeHighlight(
+      organizationId as string,
+      startDate as string,
+      endDate as string
+    );
 
-    return res.json(prSizeMetrics);
+    return res.json({
+      status: "success",
+      data,
+    });
   } catch (error) {
     console.error("Error fetching PR size metrics:", error);
     return res.status(500).json({ error: "Internal server error" });
