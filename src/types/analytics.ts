@@ -3,6 +3,7 @@ export const TABLES = {
   PULL_REQUESTS: "pullRequests",
   DEPLOYMENTS: "deployments",
   ISSUES: "issues",
+  PULL_REQUEST_TYPES: "pull_request_types",
 } as const;
 
 export interface QueryParams {

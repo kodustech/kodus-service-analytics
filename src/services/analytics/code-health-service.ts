@@ -104,12 +104,12 @@ export class CodeHealthService extends BigQueryBaseService {
     endDate: string;
   }): Promise<BugRatioData[]> {
     const pullRequestsTable = this.getTablePath("MONGO", TABLES.PULL_REQUESTS);
-    const prTypesTable = this.getTablePath("MONGO", "pull_request_types");
+    const prTypesTable = this.getTablePath("MONGO", TABLES.PULL_REQUEST_TYPES);
 
     const query = `
       WITH weekly_prs AS (
         SELECT
-          TIMESTAMP_TRUNC(TIMESTAMP(pr.closedAt), WEEK) AS week_start,
+          TIMESTAMP_TRUNC(TIMESTAMP(pr.closedAt), WEEK(MONDAY)) AS week_start,
           COUNT(*) as total_prs,
           COUNTIF(prt.type = 'Bug Fix') as bug_fix_prs,
           SAFE_DIVIDE(COUNTIF(prt.type = 'Bug Fix'), COUNT(*)) as ratio
@@ -151,7 +151,7 @@ export class CodeHealthService extends BigQueryBaseService {
     endDate: string;
   }): Promise<BugRatioHighlight> {
     const pullRequestsTable = this.getTablePath("MONGO", TABLES.PULL_REQUESTS);
-    const prTypesTable = this.getTablePath("MONGO", "pull_request_types");
+    const prTypesTable = this.getTablePath("MONGO", TABLES.PULL_REQUEST_TYPES);
 
     // Calculate the duration of the current period
     const currentStartDate = new Date(params.startDate);
@@ -160,9 +160,17 @@ export class CodeHealthService extends BigQueryBaseService {
     
     // Calculate the previous period dates
     const previousEndDate = new Date(currentStartDate);
-    previousEndDate.setDate(previousEndDate.getDate() - 1); // Subtract 1 day to not overlap
+    previousEndDate.setDate(previousEndDate.getDate() - 1);
     const previousStartDate = new Date(previousEndDate);
     previousStartDate.setTime(previousEndDate.getTime() - periodDurationMs);
+
+    // Debug logs
+    console.log("Dates for query:", {
+      currentStartDate: params.startDate,
+      currentEndDate: params.endDate,
+      previousStartDate: previousStartDate.toISOString().split('T')[0],
+      previousEndDate: previousEndDate.toISOString().split('T')[0],
+    });
 
     const query = `
       WITH current_period AS (
@@ -175,7 +183,7 @@ export class CodeHealthService extends BigQueryBaseService {
           ON pr._id = prt.pullRequestId
         WHERE pr.closedAt IS NOT NULL
           AND pr.status = 'closed'
-          AND TIMESTAMP(pr.closedAt) BETWEEN TIMESTAMP(@currentStartDate) AND TIMESTAMP(@currentEndDate)
+          AND DATE(TIMESTAMP(pr.closedAt)) BETWEEN DATE(@startDate) AND DATE(@endDate)
           AND pr.organizationId = @organizationId
       ),
       previous_period AS (
@@ -188,7 +196,7 @@ export class CodeHealthService extends BigQueryBaseService {
           ON pr._id = prt.pullRequestId
         WHERE pr.closedAt IS NOT NULL
           AND pr.status = 'closed'
-          AND TIMESTAMP(pr.closedAt) BETWEEN TIMESTAMP(@previousStartDate) AND TIMESTAMP(@previousEndDate)
+          AND DATE(TIMESTAMP(pr.closedAt)) BETWEEN DATE(@previousStartDate) AND DATE(@previousEndDate)
           AND pr.organizationId = @organizationId
       )
       SELECT
@@ -202,13 +210,19 @@ export class CodeHealthService extends BigQueryBaseService {
       CROSS JOIN previous_period p;
     `;
 
+    // Debug log para a query
+    console.log("Query:", query);
+
     const rows = await this.executeQuery(query, {
-      currentStartDate: params.startDate,
-      currentEndDate: params.endDate,
+      startDate: params.startDate,
+      endDate: params.endDate,
       previousStartDate: previousStartDate.toISOString().split('T')[0],
       previousEndDate: previousEndDate.toISOString().split('T')[0],
       organizationId: params.organizationId,
     });
+
+    // Debug log para os resultados
+    console.log("Query results:", rows[0]);
 
     const result = rows[0] || {
       current_total_prs: 0,

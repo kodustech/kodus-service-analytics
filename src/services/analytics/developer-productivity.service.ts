@@ -276,7 +276,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
     const query = `
       WITH pr_lead_times AS (
         SELECT
-          TIMESTAMP_TRUNC(TIMESTAMP(pr.closedAt), WEEK) AS week_start,
+          TIMESTAMP_TRUNC(TIMESTAMP(pr.closedAt), WEEK(MONDAY)) AS week_start,
           TIMESTAMP_DIFF(
             TIMESTAMP(pr.closedAt),
             TIMESTAMP(MIN(JSON_VALUE(c.commit_timestamp))),
@@ -421,7 +421,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
     const query = `
       WITH pr_weekly AS (
         SELECT
-          TIMESTAMP_TRUNC(TIMESTAMP(pr.closedAt), WEEK) AS week_start,
+          TIMESTAMP_TRUNC(TIMESTAMP(pr.closedAt), WEEK(MONDAY)) AS week_start,
           JSON_VALUE(auth.author_username) AS author,
           COUNT(pr._id) AS pr_count
         FROM ${this.getTablePath("MONGO", "pullRequests")} AS pr
@@ -463,7 +463,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
     const query = `
       WITH open_prs AS (
         SELECT
-          TIMESTAMP_TRUNC(TIMESTAMP(pr.createdAt), WEEK) AS week_start,
+          TIMESTAMP_TRUNC(TIMESTAMP(pr.createdAt), WEEK(MONDAY)) AS week_start,
           COUNT(*) AS opened_count
         FROM ${this.getTablePath("MONGO", "pullRequests")} AS pr
         WHERE pr.createdAt IS NOT NULL
@@ -474,7 +474,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
       ),
       closed_prs AS (
         SELECT
-          TIMESTAMP_TRUNC(TIMESTAMP(pr.closedAt), WEEK) AS week_start,
+          TIMESTAMP_TRUNC(TIMESTAMP(pr.closedAt), WEEK(MONDAY)) AS week_start,
           COUNT(*) AS closed_count
         FROM ${this.getTablePath("MONGO", "pullRequests")} AS pr
         WHERE pr.closedAt IS NOT NULL
@@ -523,7 +523,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
           pr._id,
           TIMESTAMP(pr.openedAt) AS opened_at,
           TIMESTAMP(pr.closedAt) AS closed_at,
-          TIMESTAMP_TRUNC(TIMESTAMP(pr.closedAt), WEEK) AS week_start,
+          TIMESTAMP_TRUNC(TIMESTAMP(pr.closedAt), WEEK(MONDAY)) AS week_start,
           MIN(TIMESTAMP(JSON_VALUE(c.commit_timestamp))) AS first_commit,
           MAX(TIMESTAMP(JSON_VALUE(c.commit_timestamp))) AS last_commit
         FROM ${this.getTablePath("MONGO", "pullRequests")} AS pr
@@ -537,7 +537,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
           pr._id,
           TIMESTAMP(pr.openedAt),
           TIMESTAMP(pr.closedAt),
-          TIMESTAMP_TRUNC(TIMESTAMP(pr.closedAt), WEEK)
+          TIMESTAMP_TRUNC(TIMESTAMP(pr.closedAt), WEEK(MONDAY))
       )
       SELECT
         FORMAT_TIMESTAMP('%Y-%m-%d', week_start) as week_start,
