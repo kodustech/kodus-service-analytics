@@ -622,7 +622,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
     const query = `
       WITH commit_activity AS (
         SELECT
-          DATE(TIMESTAMP(JSON_VALUE(c.commit_timestamp))) AS activity_date,
+          FORMAT_DATE('%Y-%m-%d', DATE(TIMESTAMP(JSON_VALUE(c.commit_timestamp)))) AS activity_date,
           JSON_VALUE(c.commit_author) AS developer,
           COUNT(DISTINCT JSON_VALUE(c.commit_hash)) AS commit_count
         FROM ${this.getTablePath("MONGO", "commits_view")} AS c
@@ -638,7 +638,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
       ),
       pr_activity AS (
         SELECT
-          DATE(TIMESTAMP(pr.createdAt)) AS activity_date,
+          FORMAT_DATE('%Y-%m-%d', DATE(TIMESTAMP(pr.createdAt))) AS activity_date,
           JSON_VALUE(auth.author_username) AS developer,
           COUNT(pr._id) AS pr_count
         FROM ${this.getTablePath("MONGO", "pullRequests")} AS pr
