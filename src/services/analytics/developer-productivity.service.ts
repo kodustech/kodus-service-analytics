@@ -35,7 +35,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
 
     const query = `
       SELECT
-        DATE_TRUNC(TIMESTAMP(closedAt), WEEK) AS week_start,
+        DATE(DATE_TRUNC(TIMESTAMP(closedAt), WEEK(MONDAY))) AS week_start,
         COUNT(*) AS pr_count
       FROM ${pullRequestsTable} AS pr
       WHERE 1=1
@@ -48,11 +48,16 @@ export class DeveloperProductivityService extends BigQueryBaseService {
       ORDER BY week_start
     `;
 
-    return this.executeQuery(query, {
+    const rows = await this.executeQuery(query, {
       startDate: params.startDate,
       endDate: params.endDate,
       organizationId: params.organizationId,
     });
+
+    return rows.map((row) => ({
+      weekStart: row.week_start.value,
+      prCount: Number(row.pr_count),
+    }));
   }
 
   async getDeployFrequencyHighlight(
@@ -66,39 +71,45 @@ export class DeveloperProductivityService extends BigQueryBaseService {
       throw new AppError(400, "Invalid date format. Use YYYY-MM-DD");
     }
 
-    const pullRequestsTable = this.getTablePath("MONGO", TABLES.PULL_REQUESTS);
-
-    // Calculate the duration of the current period
+    // Calculate periods using Date objects but only considering days
     const currentStartDate = new Date(startDate);
     const currentEndDate = new Date(endDate);
-    const periodDurationMs = currentEndDate.getTime() - currentStartDate.getTime();
-    const periodDurationWeeks = periodDurationMs / (7 * 24 * 60 * 60 * 1000);
-    
-    // Calculate the previous period dates
+
+    // Calculate number of days in current period
+    const daysDiff = Math.floor(
+      (currentEndDate.getTime() - currentStartDate.getTime()) /
+        (1000 * 60 * 60 * 24)
+    );
+
+    // Calculate previous period dates properly
     const previousEndDate = new Date(currentStartDate);
-    previousEndDate.setDate(previousEndDate.getDate() - 1); // Subtract 1 day to not overlap
+    previousEndDate.setDate(previousEndDate.getDate() - 1); // Day before current start
     const previousStartDate = new Date(previousEndDate);
-    previousStartDate.setTime(previousEndDate.getTime() - periodDurationMs);
+    previousStartDate.setDate(previousEndDate.getDate() - daysDiff); // Same duration as current period
+
+    const pullRequestsTable = this.getTablePath("MONGO", TABLES.PULL_REQUESTS);
 
     const query = `
       WITH current_period AS (
         SELECT
           COUNT(*) as total_deployments,
-          SAFE_DIVIDE(COUNT(*), ${periodDurationWeeks}) as avg_per_week
+          COUNT(*) / CEIL(DATE_DIFF(DATE(@currentEndDate), DATE(@currentStartDate), DAY) / 7) as avg_per_week
         FROM ${pullRequestsTable}
         WHERE closedAt IS NOT NULL
           AND status = 'closed'
-          AND TIMESTAMP(closedAt) BETWEEN TIMESTAMP(@currentStartDate) AND TIMESTAMP(@currentEndDate)
+          AND DATE(closedAt) >= DATE(@currentStartDate)
+          AND DATE(closedAt) <= DATE(@currentEndDate)
           AND organizationId = @organizationId
       ),
       previous_period AS (
         SELECT
           COUNT(*) as total_deployments,
-          SAFE_DIVIDE(COUNT(*), ${periodDurationWeeks}) as avg_per_week
+          COUNT(*) / CEIL(DATE_DIFF(DATE(@previousEndDate), DATE(@previousStartDate), DAY) / 7) as avg_per_week
         FROM ${pullRequestsTable}
         WHERE closedAt IS NOT NULL
           AND status = 'closed'
-          AND TIMESTAMP(closedAt) BETWEEN TIMESTAMP(@previousStartDate) AND TIMESTAMP(@previousEndDate)
+          AND DATE(closedAt) >= DATE(@previousStartDate)
+          AND DATE(closedAt) <= DATE(@previousEndDate)
           AND organizationId = @organizationId
       )
       SELECT
@@ -113,8 +124,8 @@ export class DeveloperProductivityService extends BigQueryBaseService {
     const rows = await this.executeQuery(query, {
       currentStartDate: startDate,
       currentEndDate: endDate,
-      previousStartDate: previousStartDate.toISOString().split('T')[0],
-      previousEndDate: previousEndDate.toISOString().split('T')[0],
+      previousStartDate: previousStartDate.toISOString().split("T")[0],
+      previousEndDate: previousEndDate.toISOString().split("T")[0],
       organizationId,
     });
 
@@ -127,22 +138,24 @@ export class DeveloperProductivityService extends BigQueryBaseService {
 
     const currentAvg = Number(result.current_avg_per_week.toFixed(2));
     const previousAvg = Number(result.previous_avg_per_week.toFixed(2));
-    
+
     // Calculate percentage change and trend
     let percentageChange = 0;
-    let trend: 'improved' | 'worsened' | 'unchanged' = 'unchanged';
-    
+    let trend: "improved" | "worsened" | "unchanged" = "unchanged";
+
     if (previousAvg > 0) {
-      percentageChange = Number((((currentAvg - previousAvg) / previousAvg) * 100).toFixed(2));
+      percentageChange = Number(
+        (((currentAvg - previousAvg) / previousAvg) * 100).toFixed(2)
+      );
       // For deploy frequency, an increase is an improvement
       if (percentageChange > 0) {
-        trend = 'improved';
+        trend = "improved";
       } else if (percentageChange < 0) {
-        trend = 'worsened';
+        trend = "worsened";
       }
     } else if (currentAvg > 0) {
       percentageChange = 100;
-      trend = 'improved';
+      trend = "improved";
     }
 
     return {
@@ -169,8 +182,9 @@ export class DeveloperProductivityService extends BigQueryBaseService {
     // Calculate the duration of the current period
     const currentStartDate = new Date(startDate);
     const currentEndDate = new Date(endDate);
-    const periodDurationMs = currentEndDate.getTime() - currentStartDate.getTime();
-    
+    const periodDurationMs =
+      currentEndDate.getTime() - currentStartDate.getTime();
+
     // Calculate the previous period dates
     const previousEndDate = new Date(currentStartDate);
     previousEndDate.setDate(previousEndDate.getDate() - 1); // Subtract 1 day to not overlap
@@ -221,8 +235,8 @@ export class DeveloperProductivityService extends BigQueryBaseService {
     const rows = await this.executeQuery(query, {
       currentStartDate: startDate,
       currentEndDate: endDate,
-      previousStartDate: previousStartDate.toISOString().split('T')[0],
-      previousEndDate: previousEndDate.toISOString().split('T')[0],
+      previousStartDate: previousStartDate.toISOString().split("T")[0],
+      previousEndDate: previousEndDate.toISOString().split("T")[0],
       organizationId,
     });
 
@@ -232,24 +246,32 @@ export class DeveloperProductivityService extends BigQueryBaseService {
     };
 
     // Ensure we have numeric values, defaulting to 0 if null/undefined
-    const currentMinutes = Number((result.current_lead_time_p75_minutes || 0).toFixed(2));
-    const previousMinutes = Number((result.previous_lead_time_p75_minutes || 0).toFixed(2));
-    
+    const currentMinutes = Number(
+      (result.current_lead_time_p75_minutes || 0).toFixed(2)
+    );
+    const previousMinutes = Number(
+      (result.previous_lead_time_p75_minutes || 0).toFixed(2)
+    );
+
     // Calculate percentage change and trend
     let percentageChange = 0;
-    let trend: 'improved' | 'worsened' | 'unchanged' = 'unchanged';
-    
+    let trend: "improved" | "worsened" | "unchanged" = "unchanged";
+
     if (previousMinutes > 0) {
-      percentageChange = Number((((currentMinutes - previousMinutes) / previousMinutes) * 100).toFixed(2));
+      percentageChange = Number(
+        (((currentMinutes - previousMinutes) / previousMinutes) * 100).toFixed(
+          2
+        )
+      );
       // For lead time, a decrease is an improvement
       if (percentageChange < 0) {
-        trend = 'improved';
+        trend = "improved";
       } else if (percentageChange > 0) {
-        trend = 'worsened';
+        trend = "worsened";
       }
     } else if (currentMinutes > 0) {
       percentageChange = 100;
-      trend = 'worsened';
+      trend = "worsened";
     }
 
     return {
@@ -322,8 +344,9 @@ export class DeveloperProductivityService extends BigQueryBaseService {
     // Calculate the duration of the current period
     const currentStartDate = new Date(startDate);
     const currentEndDate = new Date(endDate);
-    const periodDurationMs = currentEndDate.getTime() - currentStartDate.getTime();
-    
+    const periodDurationMs =
+      currentEndDate.getTime() - currentStartDate.getTime();
+
     // Calculate the previous period dates
     const previousEndDate = new Date(currentStartDate);
     previousEndDate.setDate(previousEndDate.getDate() - 1); // Subtract 1 day to not overlap
@@ -356,8 +379,8 @@ export class DeveloperProductivityService extends BigQueryBaseService {
     const rows = await this.executeQuery(query, {
       currentStartDate: startDate,
       currentEndDate: endDate,
-      previousStartDate: previousStartDate.toISOString().split('T')[0],
-      previousEndDate: previousEndDate.toISOString().split('T')[0],
+      previousStartDate: previousStartDate.toISOString().split("T")[0],
+      previousEndDate: previousEndDate.toISOString().split("T")[0],
       organizationId,
     });
 
@@ -372,8 +395,8 @@ export class DeveloperProductivityService extends BigQueryBaseService {
     };
 
     // Process query results
-    rows.forEach(row => {
-      if (row.period === 'current') {
+    rows.forEach((row) => {
+      if (row.period === "current") {
         currentPeriod = {
           averagePRSize: Number(row.avg_pr_size || 0),
           totalPRs: Number(row.total_prs || 0),
@@ -388,19 +411,25 @@ export class DeveloperProductivityService extends BigQueryBaseService {
 
     // Calculate percentage change and trend
     let percentageChange = 0;
-    let trend: 'improved' | 'worsened' | 'unchanged' = 'unchanged';
-    
+    let trend: "improved" | "worsened" | "unchanged" = "unchanged";
+
     if (previousPeriod.averagePRSize > 0) {
-      percentageChange = Number((((currentPeriod.averagePRSize - previousPeriod.averagePRSize) / previousPeriod.averagePRSize) * 100).toFixed(2));
+      percentageChange = Number(
+        (
+          ((currentPeriod.averagePRSize - previousPeriod.averagePRSize) /
+            previousPeriod.averagePRSize) *
+          100
+        ).toFixed(2)
+      );
       // For PR size, a decrease is an improvement (smaller PRs are better)
       if (percentageChange < 0) {
-        trend = 'improved';
+        trend = "improved";
       } else if (percentageChange > 0) {
-        trend = 'worsened';
+        trend = "worsened";
       }
     } else if (currentPeriod.averagePRSize > 0) {
       percentageChange = 100;
-      trend = 'worsened';
+      trend = "worsened";
     }
 
     return {

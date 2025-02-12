@@ -357,7 +357,7 @@ router.get(
  *         description: Erro interno do servidor
  */
 router.get(
-  "/charts/lead-time",
+  "/charts/lead-time-for-change",
   async (req: Request, res: Response) => {
     try {
       const { organizationId, startDate, endDate } = req.query;
