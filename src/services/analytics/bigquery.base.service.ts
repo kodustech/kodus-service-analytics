@@ -5,6 +5,7 @@ import { AppError } from "../../middleware/errorHandler";
 export const DATASETS = {
   MONGO: process.env.BIGQUERY_MONGO_DATASET || "kodus_mongo",
   POSTGRES: process.env.BIGQUERY_POSTGRES_DATASET || "kodus_postgres",
+  CUSTOM_TABLES: process.env.BIGQUERY_CUSTOM_TABLES_DATASET || "kodus_custom_tables",
 } as const;
 
 export abstract class BigQueryBaseService {

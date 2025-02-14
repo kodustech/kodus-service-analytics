@@ -1,12 +1,5 @@
 import { BigQueryBaseService } from "./bigquery.base.service";
 import {
-  DeveloperActivityData,
-  LeadTimeBreakdownData,
-  LeadTimeChartData,
-  LeadTimeMetrics,
-  PullRequestsByDevChartData,
-  PullRequestSizeMetrics,
-  PullRequestsOpenedVsClosedData,
   RepositorySuggestions,
   SuggestionCategoryCount,
   BugRatioData,
@@ -104,7 +97,10 @@ export class CodeHealthService extends BigQueryBaseService {
     endDate: string;
   }): Promise<BugRatioData[]> {
     const pullRequestsTable = this.getTablePath("MONGO", TABLES.PULL_REQUESTS);
-    const prTypesTable = this.getTablePath("MONGO", TABLES.PULL_REQUEST_TYPES);
+    const prTypesTable = this.getTablePath(
+      "CUSTOM_TABLES",
+      TABLES.PULL_REQUEST_TYPES
+    );
 
     const query = `
       WITH weekly_prs AS (
@@ -151,13 +147,17 @@ export class CodeHealthService extends BigQueryBaseService {
     endDate: string;
   }): Promise<BugRatioHighlight> {
     const pullRequestsTable = this.getTablePath("MONGO", TABLES.PULL_REQUESTS);
-    const prTypesTable = this.getTablePath("MONGO", TABLES.PULL_REQUEST_TYPES);
+    const prTypesTable = this.getTablePath(
+      "CUSTOM_TABLES",
+      TABLES.PULL_REQUEST_TYPES
+    );
 
     // Calculate the duration of the current period
     const currentStartDate = new Date(params.startDate);
     const currentEndDate = new Date(params.endDate);
-    const periodDurationMs = currentEndDate.getTime() - currentStartDate.getTime();
-    
+    const periodDurationMs =
+      currentEndDate.getTime() - currentStartDate.getTime();
+
     // Calculate the previous period dates
     const previousEndDate = new Date(currentStartDate);
     previousEndDate.setDate(previousEndDate.getDate() - 1);
@@ -168,8 +168,8 @@ export class CodeHealthService extends BigQueryBaseService {
     console.log("Dates for query:", {
       currentStartDate: params.startDate,
       currentEndDate: params.endDate,
-      previousStartDate: previousStartDate.toISOString().split('T')[0],
-      previousEndDate: previousEndDate.toISOString().split('T')[0],
+      previousStartDate: previousStartDate.toISOString().split("T")[0],
+      previousEndDate: previousEndDate.toISOString().split("T")[0],
     });
 
     const query = `
@@ -216,8 +216,8 @@ export class CodeHealthService extends BigQueryBaseService {
     const rows = await this.executeQuery(query, {
       startDate: params.startDate,
       endDate: params.endDate,
-      previousStartDate: previousStartDate.toISOString().split('T')[0],
-      previousEndDate: previousEndDate.toISOString().split('T')[0],
+      previousStartDate: previousStartDate.toISOString().split("T")[0],
+      previousEndDate: previousEndDate.toISOString().split("T")[0],
       organizationId: params.organizationId,
     });
 
@@ -235,22 +235,24 @@ export class CodeHealthService extends BigQueryBaseService {
 
     const currentRatio = Number((result.current_ratio || 0).toFixed(2));
     const previousRatio = Number((result.previous_ratio || 0).toFixed(2));
-    
+
     // Calculate percentage change and trend
     let percentageChange = 0;
-    let trend: 'improved' | 'worsened' | 'unchanged' = 'unchanged';
-    
+    let trend: "improved" | "worsened" | "unchanged" = "unchanged";
+
     if (previousRatio > 0) {
-      percentageChange = Number((((currentRatio - previousRatio) / previousRatio) * 100).toFixed(2));
+      percentageChange = Number(
+        (((currentRatio - previousRatio) / previousRatio) * 100).toFixed(2)
+      );
       // For bug ratio, a decrease is an improvement
       if (percentageChange < 0) {
-        trend = 'improved';
+        trend = "improved";
       } else if (percentageChange > 0) {
-        trend = 'worsened';
+        trend = "worsened";
       }
     } else if (currentRatio > 0) {
       percentageChange = 100;
-      trend = 'worsened';
+      trend = "worsened";
     }
 
     return {
