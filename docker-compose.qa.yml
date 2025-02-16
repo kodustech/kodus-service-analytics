@@ -9,18 +9,15 @@ services:
         max-size: "200m"
         max-file: "10"
     ports:
-      - "${PORT}:${PORT}"
+      - "3007:3007"
     environment:
-      - ENV=homolog
-      - NODE_ENV=homolog
+      - ENV=production
+      - NODE_ENV=production
     env_file:
       - .env.qa
     networks:
       - shared-network
     restart: unless-stopped
-    build:
-      context: .
-      dockerfile: DockerFiles/Dockerfile.qa
 
 volumes:
   log_volume:

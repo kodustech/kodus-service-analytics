@@ -9,7 +9,7 @@ services:
         max-size: "200m"
         max-file: "10"
     ports:
-      - "${PORT}:${PORT}"
+      - "3007:3007"
     environment:
       - ENV=production
       - NODE_ENV=production
@@ -18,9 +18,6 @@ services:
     networks:
       - shared-network
     restart: unless-stopped
-    build:
-      context: .
-      dockerfile: DockerFiles/Dockerfile.prod
 
 volumes:
   log_volume:
