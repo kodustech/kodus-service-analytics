@@ -33,3 +33,5 @@ Thumbs.db
 
 # Config folder with sensitive data
 /config/ 
+
+.tsconfig.tsbuildinfo

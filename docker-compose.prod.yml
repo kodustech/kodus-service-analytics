@@ -4,12 +4,13 @@ services:
     container_name: ${CONTAINER_NAME}
     volumes:
       - log_volume:/app/logs
+      - ./google-credentials.json:/app/dist/config/google-credentials.json
     logging:
       options:
         max-size: "200m"
         max-file: "10"
     ports:
-      - "3007:3007"
+      - "3008:3008"
     environment:
       - ENV=production
       - NODE_ENV=production
