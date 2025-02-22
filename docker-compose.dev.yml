@@ -7,12 +7,13 @@ services:
       dockerfile: DockerFiles/Dockerfile.dev
     ports:
       - "${PORT}:${PORT}"
-      - "9229:9229"
+      - "9230:9230"
     env_file:
       - .env
     restart: unless-stopped
     volumes:
       - .:/usr/src/app:delegated
+      - ./src/config/google-credentials.json:/usr/src/app/dist/config/google-credentials.json:ro
     networks:
       - kodus-backend-services
       - shared-network
