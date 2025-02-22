@@ -49,7 +49,7 @@ export class CodeHealthService extends BigQueryBaseService {
   }): Promise<RepositorySuggestions[]> {
     const query = `
           WITH repo_suggestions AS (
-            bug
+            SELECT
               JSON_VALUE(pr.repository, '$.name') AS repository,
               JSON_VALUE(sug, '$.label') AS suggestion_category,
               COUNT(*) AS suggestions_count
