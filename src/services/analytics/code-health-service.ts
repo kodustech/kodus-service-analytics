@@ -49,7 +49,7 @@ export class CodeHealthService extends BigQueryBaseService {
   }): Promise<RepositorySuggestions[]> {
     const query = `
           WITH repo_suggestions AS (
-            SELECT
+            bug
               JSON_VALUE(pr.repository, '$.name') AS repository,
               JSON_VALUE(sug, '$.label') AS suggestion_category,
               COUNT(*) AS suggestions_count
@@ -255,19 +255,23 @@ export class CodeHealthService extends BigQueryBaseService {
       trend = "worsened";
     }
 
+    // Convert ratios to percentages
+    const currentRatioPercentage = currentRatio * 100;
+    const previousRatioPercentage = previousRatio * 100;
+
     return {
       currentPeriod: {
         totalPRs: Number(result.current_total_prs),
         bugFixPRs: Number(result.current_bug_fix_prs),
-        ratio: currentRatio,
+        ratio: Number(currentRatioPercentage.toFixed(2)),
       },
       previousPeriod: {
         totalPRs: Number(result.previous_total_prs),
         bugFixPRs: Number(result.previous_bug_fix_prs),
-        ratio: previousRatio,
+        ratio: Number(previousRatioPercentage.toFixed(2)),
       },
       comparison: {
-        percentageChange,
+        percentageChange: Number(percentageChange.toFixed(2)),
         trend,
       },
     };
