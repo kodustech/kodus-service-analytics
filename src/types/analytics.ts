@@ -4,6 +4,8 @@ export const TABLES = {
   DEPLOYMENTS: "deployments",
   ISSUES: "issues",
   PULL_REQUEST_TYPES: "pull_request_types",
+  ORGANIZATION: "organizations",
+  SUGGESTIONS_VIEW: "suggestions_view",
 } as const;
 
 export interface QueryParams {
@@ -46,7 +48,7 @@ export interface LeadTimeHighlight {
   };
   comparison: {
     percentageChange: number;
-    trend: 'improved' | 'worsened' | 'unchanged';
+    trend: "improved" | "worsened" | "unchanged";
   };
 }
 
@@ -85,7 +87,7 @@ export interface PRSizeHighlight {
   };
   comparison: {
     percentageChange: number;
-    trend: 'improved' | 'worsened' | 'unchanged';
+    trend: "improved" | "worsened" | "unchanged";
   };
 }
 
@@ -130,7 +132,7 @@ export interface BugRatioHighlight {
   };
   comparison: {
     percentageChange: number;
-    trend: 'improved' | 'worsened' | 'unchanged';
+    trend: "improved" | "worsened" | "unchanged";
   };
 }
 
@@ -145,6 +147,12 @@ export interface DeployFrequencyHighlight {
   };
   comparison: {
     percentageChange: number;
-    trend: 'improved' | 'worsened' | 'unchanged';
+    trend: "improved" | "worsened" | "unchanged";
   };
+}
+
+export interface SuggestionsImplementationRate {
+  suggestionsSent: number;
+  suggestionsImplemented: number;
+  implementationRate: number;
 }

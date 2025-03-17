@@ -3,11 +3,15 @@ import { authenticateApiKey } from "../middleware/auth";
 import { Request, Response } from "express";
 import { codeHealthService } from "../services/analytics/code-health-service";
 import { AppError } from "../middleware/errorHandler";
+import { cacheMiddleware } from "../middleware/cache.middleware";
 
 const router = Router();
 
 // Middleware de autenticação para todas as rotas
 router.use(authenticateApiKey);
+
+// Middleware de cache para todas as rotas (15 minutos)
+router.use(cacheMiddleware(900));
 
 // Rota para obter deploy frequency
 
@@ -19,7 +23,7 @@ router.use(authenticateApiKey);
  *       type: apiKey
  *       in: header
  *       name: x-api-key
- * 
+ *
  * /api/code-health/charts/suggestions-by-category:
  *   get:
  *     summary: Obtém sugestões agrupadas por categoria
@@ -240,24 +244,21 @@ router.get(
  *       500:
  *         description: Erro interno do servidor
  */
-router.get(
-  "/charts/bug-ratio",
-  async (req: Request, res: Response) => {
-    const { organizationId, startDate, endDate } = req.query;
+router.get("/charts/bug-ratio", async (req: Request, res: Response) => {
+  const { organizationId, startDate, endDate } = req.query;
 
-    if (!organizationId || !startDate || !endDate) {
-      throw new AppError(400, "Missing required parameters");
-    }
-
-    const data = await codeHealthService.getBugRatioData({
-      organizationId: organizationId as string,
-      startDate: startDate as string,
-      endDate: endDate as string,
-    });
-
-    res.json(data);
+  if (!organizationId || !startDate || !endDate) {
+    throw new AppError(400, "Missing required parameters");
   }
-);
+
+  const data = await codeHealthService.getBugRatioData({
+    organizationId: organizationId as string,
+    startDate: startDate as string,
+    endDate: endDate as string,
+  });
+
+  res.json(data);
+});
 
 /**
  * @swagger
@@ -341,32 +342,59 @@ router.get(
  *       500:
  *         description: Erro interno do servidor
  */
-router.get(
-  "/highlights/bug-ratio",
-  async (req: Request, res: Response) => {
-    try {
-      const { organizationId, startDate, endDate } = req.query;
+router.get("/highlights/bug-ratio", async (req: Request, res: Response) => {
+  try {
+    const { organizationId, startDate, endDate } = req.query;
 
-      if (!organizationId || !startDate || !endDate) {
-        return res.status(400).json({
-          error: "Missing required parameters: organizationId, startDate, endDate",
-        });
-      }
-
-      const data = await codeHealthService.getBugRatioHighlight({
-        organizationId: organizationId as string,
-        startDate: startDate as string,
-        endDate: endDate as string,
+    if (!organizationId || !startDate || !endDate) {
+      return res.status(400).json({
+        error:
+          "Missing required parameters: organizationId, startDate, endDate",
       });
-
-      return res.json({
-        status: "success",
-        data,
-      });
-    } catch (error) {
-      console.error("Error fetching bug ratio highlight:", error);
-      return res.status(500).json({ error: "Internal server error" });
     }
+
+    const data = await codeHealthService.getBugRatioHighlight({
+      organizationId: organizationId as string,
+      startDate: startDate as string,
+      endDate: endDate as string,
+    });
+
+    return res.json({
+      status: "success",
+      data,
+    });
+  } catch (error) {
+    console.error("Error fetching bug ratio highlight:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * @swagger
+ * /api/code-health/highlights/suggestions-implementation-rate:
+ *   get:
+ *     summary: Obtém a taxa de implementação de sugestões
+ *     tags: [Code Health]
+ *     security:
+ *
+ */
+router.get(
+  "/highlights/suggestions-implementation-rate",
+  async (req: Request, res: Response) => {
+    const { organizationId } = req.query;
+
+    if (!organizationId) {
+      return res.status(400).json({ error: "Missing required parameters" });
+    }
+
+    const data = await codeHealthService.getSuggestionsImplementationRate({
+      organizationId: organizationId as string,
+    });
+
+    return res.json({
+      status: "success",
+      data,
+    });
   }
 );
 
