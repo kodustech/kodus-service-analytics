@@ -2,11 +2,15 @@ import { Router } from "express";
 import { authenticateApiKey } from "../middleware/auth";
 import { Request, Response } from "express";
 import { developerProductivityService } from "../services/analytics/developer-productivity.service";
+import { cacheMiddleware } from "../middleware/cache.middleware";
 
 const router = Router();
 
 // Middleware de autenticação para todas as rotas
 router.use(authenticateApiKey);
+
+// Middleware de cache para todas as rotas (15 minutos)
+router.use(cacheMiddleware(900));
 
 /**
  * @swagger

@@ -5,6 +5,7 @@ import {
   BugRatioData,
   BugRatioHighlight,
   TABLES,
+  SuggestionsImplementationRate,
 } from "../../types/analytics";
 import { AppError } from "../../middleware/errorHandler";
 
@@ -274,6 +275,53 @@ export class CodeHealthService extends BigQueryBaseService {
         percentageChange: Number(percentageChange.toFixed(2)),
         trend,
       },
+    };
+  }
+
+  async getSuggestionsImplementationRate(params: {
+    organizationId: string;
+  }): Promise<SuggestionsImplementationRate> {
+    const suggestionsViewTable = this.getTablePath(
+      "MONGO",
+      TABLES.SUGGESTIONS_VIEW
+    );
+
+    const pullRequestsTable = this.getTablePath("MONGO", TABLES.PULL_REQUESTS);
+
+    const organizationTable = this.getTablePath(
+      "POSTGRES",
+      TABLES.ORGANIZATION
+    );
+
+    const query = `SELECT
+  COUNT(*) AS suggestions_sent,
+  SUM(CASE 
+        WHEN suggestionImplementationStatus IN ('implemented', 'partially_implemented') 
+        THEN 1 
+        ELSE 0 
+      END) AS suggestions_implemented,
+  SAFE_DIVIDE(
+    SUM(CASE WHEN suggestionImplementationStatus IN ('implemented', 'partially_implemented') THEN 1 ELSE 0 END),
+    COUNT(*)
+  ) AS implementation_rate
+FROM ${suggestionsViewTable} as sv
+INNER JOIN ${pullRequestsTable} as pr
+  ON sv.pullRequestId = pr._id 
+INNER JOIN ${organizationTable} as o
+  ON o.uuid = pr.organizationId
+WHERE sv.suggestionDeliveryStatus = 'sent'
+  AND o.uuid = @organizationId
+  AND DATE(TIMESTAMP(suggestionCreatedAt)) >= DATE_SUB(CURRENT_DATE(), INTERVAL 2 WEEK);
+`;
+
+    const rows = await this.executeQuery(query, {
+      organizationId: params.organizationId,
+    });
+
+    return {
+      suggestionsSent: Number(rows[0].suggestions_sent),
+      suggestionsImplemented: Number(rows[0].suggestions_implemented),
+      implementationRate: Number((rows[0].implementation_rate || 0).toFixed(2)),
     };
   }
 }
