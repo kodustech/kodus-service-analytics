@@ -603,14 +603,14 @@ export class DeveloperProductivityService extends BigQueryBaseService {
     return rows.map((row) => ({
       weekStart: row.week_start,
       prCount: Number(row.pr_count),
-      codingTimeMinutes: Number(row.coding_time_minutes.toFixed(2)),
-      codingTimeHours: Number((row.coding_time_minutes / 60).toFixed(2)),
-      pickupTimeMinutes: Number(row.pickup_time_minutes.toFixed(2)),
-      pickupTimeHours: Number((row.pickup_time_minutes / 60).toFixed(2)),
-      reviewTimeMinutes: Number(row.review_time_minutes.toFixed(2)),
-      reviewTimeHours: Number((row.review_time_minutes / 60).toFixed(2)),
-      totalTimeMinutes: Number(row.total_time_minutes.toFixed(2)),
-      totalTimeHours: Number((row.total_time_minutes / 60).toFixed(2)),
+      codingTimeMinutes: Number(row.coding_time_minutes?.toFixed(2)),
+      codingTimeHours: Number((row.coding_time_minutes / 60)?.toFixed(2)),
+      pickupTimeMinutes: Number(row.pickup_time_minutes?.toFixed(2)),
+      pickupTimeHours: Number((row.pickup_time_minutes / 60)?.toFixed(2)),
+      reviewTimeMinutes: Number(row.review_time_minutes?.toFixed(2)),
+      reviewTimeHours: Number((row.review_time_minutes / 60)?.toFixed(2)),
+      totalTimeMinutes: Number(row.total_time_minutes?.toFixed(2)),
+      totalTimeHours: Number((row.total_time_minutes / 60)?.toFixed(2)),
     }));
   }
 
