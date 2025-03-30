@@ -113,7 +113,7 @@ export class CodeHealthService extends BigQueryBaseService {
         FROM ${pullRequestsTable} AS pr
         LEFT JOIN ${prTypesTable} AS prt
           ON pr._id = prt.pullRequestId
-        WHERE pr.closedAt IS NOT NULL
+        WHERE pr.closedAt IS NOT NULL AND pr.closedAt <> ''
           AND pr.status = 'closed'
           AND TIMESTAMP(pr.closedAt) BETWEEN TIMESTAMP(@startDate) AND TIMESTAMP(@endDate)
           AND pr.organizationId = @organizationId
@@ -182,7 +182,7 @@ export class CodeHealthService extends BigQueryBaseService {
         FROM ${pullRequestsTable} AS pr
         LEFT JOIN ${prTypesTable} AS prt
           ON pr._id = prt.pullRequestId
-        WHERE pr.closedAt IS NOT NULL
+        WHERE pr.closedAt IS NOT NULL AND pr.closedAt <> ''   
           AND pr.status = 'closed'
           AND DATE(TIMESTAMP(pr.closedAt)) BETWEEN DATE(@startDate) AND DATE(@endDate)
           AND pr.organizationId = @organizationId
@@ -195,7 +195,7 @@ export class CodeHealthService extends BigQueryBaseService {
         FROM ${pullRequestsTable} AS pr
         LEFT JOIN ${prTypesTable} AS prt
           ON pr._id = prt.pullRequestId
-        WHERE pr.closedAt IS NOT NULL
+        WHERE pr.closedAt IS NOT NULL AND pr.closedAt <> ''
           AND pr.status = 'closed'
           AND DATE(TIMESTAMP(pr.closedAt)) BETWEEN DATE(@previousStartDate) AND DATE(@previousEndDate)
           AND pr.organizationId = @organizationId

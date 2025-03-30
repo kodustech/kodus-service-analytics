@@ -95,7 +95,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
           COUNT(*) as total_deployments,
           COUNT(*) / CEIL(DATE_DIFF(DATE(@currentEndDate), DATE(@currentStartDate), DAY) / 7) as avg_per_week
         FROM ${pullRequestsTable}
-        WHERE closedAt IS NOT NULL
+        WHERE closedAt IS NOT NULL AND closedAt <> ''
           AND status = 'closed'
           AND DATE(closedAt) >= DATE(@currentStartDate)
           AND DATE(closedAt) <= DATE(@currentEndDate)
@@ -106,7 +106,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
           COUNT(*) as total_deployments,
           COUNT(*) / CEIL(DATE_DIFF(DATE(@previousEndDate), DATE(@previousStartDate), DAY) / 7) as avg_per_week
         FROM ${pullRequestsTable}
-        WHERE closedAt IS NOT NULL
+        WHERE closedAt IS NOT NULL AND closedAt <> ''
           AND status = 'closed'
           AND DATE(closedAt) >= DATE(@previousStartDate)
           AND DATE(closedAt) <= DATE(@previousEndDate)
@@ -207,7 +207,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
         FROM ${this.getTablePath("MONGO", "pullRequests")} AS pr
         JOIN ${this.getTablePath("MONGO", "commits_view")} AS c
           ON pr._id = c.pull_request_id
-        WHERE pr.closedAt IS NOT NULL
+        WHERE pr.closedAt IS NOT NULL AND pr.closedAt <> ''
           AND pr.status = 'closed'
           AND SAFE_CAST(pr.closedAt AS TIMESTAMP) BETWEEN TIMESTAMP(@previousStartDate) AND TIMESTAMP(@currentEndDate)
           AND pr.organizationId = @organizationId
@@ -307,7 +307,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
         FROM ${this.getTablePath("MONGO", "pullRequests")} AS pr
         JOIN ${this.getTablePath("MONGO", "commits_view")} AS c
           ON pr._id = c.pull_request_id
-        WHERE pr.closedAt IS NOT NULL
+        WHERE pr.closedAt IS NOT NULL AND pr.closedAt <> ''
           AND pr.status = 'closed'
           AND SAFE_CAST(pr.closedAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
           AND SAFE_CAST(pr.closedAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
@@ -363,7 +363,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
           END as period,
           pr.totalChanges as pr_size
         FROM ${this.getTablePath("MONGO", "pullRequests")} AS pr
-        WHERE pr.closedAt IS NOT NULL
+        WHERE pr.closedAt IS NOT NULL AND pr.closedAt <> ''
           AND pr.status = 'closed'
           AND SAFE_CAST(pr.closedAt AS TIMESTAMP) BETWEEN TIMESTAMP(@previousStartDate) AND TIMESTAMP(@currentEndDate)
           AND pr.organizationId = @organizationId
@@ -456,7 +456,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
         FROM ${this.getTablePath("MONGO", "pullRequests")} AS pr
         JOIN ${this.getTablePath("MONGO", "pull_request_author_view")} AS auth
           ON pr._id = auth.pull_request_id
-        WHERE pr.closedAt IS NOT NULL
+        WHERE pr.closedAt IS NOT NULL AND pr.closedAt <> ''
           AND pr.status = 'closed'
           AND SAFE_CAST(pr.closedAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
           AND SAFE_CAST(pr.closedAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
@@ -506,7 +506,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
           TIMESTAMP_TRUNC(SAFE_CAST(pr.closedAt AS TIMESTAMP), WEEK(MONDAY)) AS week_start,
           COUNT(*) AS closed_count
         FROM ${this.getTablePath("MONGO", "pullRequests")} AS pr
-        WHERE pr.closedAt IS NOT NULL
+        WHERE pr.closedAt IS NOT NULL AND pr.closedAt <> ''
           AND pr.status = 'closed'
           AND SAFE_CAST(pr.closedAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
           AND SAFE_CAST(pr.closedAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
