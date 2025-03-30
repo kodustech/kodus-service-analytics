@@ -558,7 +558,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
         FROM ${this.getTablePath("MONGO", "pullRequests")} AS pr
         JOIN ${this.getTablePath("MONGO", "commits_view")} AS c
           ON pr._id = c.pull_request_id
-        WHERE pr.closedAt IS NOT NULL
+        WHERE pr.closedAt IS NOT NULL AND pr.closedAt <> ''
           AND pr.status = 'closed'
           AND SAFE_CAST(pr.closedAt AS TIMESTAMP) BETWEEN TIMESTAMP(@startDate) AND TIMESTAMP(@endDate)
           AND pr.organizationId = @organizationId
@@ -588,7 +588,6 @@ export class DeveloperProductivityService extends BigQueryBaseService {
         AND opened_at IS NOT NULL
         AND closed_at IS NOT NULL
         AND first_commit <= last_commit
-        AND last_commit <= opened_at
         AND opened_at <= closed_at
       GROUP BY week_start
       ORDER BY week_start;
@@ -603,14 +602,14 @@ export class DeveloperProductivityService extends BigQueryBaseService {
     return rows.map((row) => ({
       weekStart: row.week_start,
       prCount: Number(row.pr_count),
-      codingTimeMinutes: Number(row.coding_time_minutes.toFixed(2)),
-      codingTimeHours: Number((row.coding_time_minutes / 60).toFixed(2)),
-      pickupTimeMinutes: Number(row.pickup_time_minutes.toFixed(2)),
-      pickupTimeHours: Number((row.pickup_time_minutes / 60).toFixed(2)),
-      reviewTimeMinutes: Number(row.review_time_minutes.toFixed(2)),
-      reviewTimeHours: Number((row.review_time_minutes / 60).toFixed(2)),
-      totalTimeMinutes: Number(row.total_time_minutes.toFixed(2)),
-      totalTimeHours: Number((row.total_time_minutes / 60).toFixed(2)),
+      codingTimeMinutes: Number(row.coding_time_minutes?.toFixed(2)),
+      codingTimeHours: Number((row.coding_time_minutes / 60)?.toFixed(2)),
+      pickupTimeMinutes: Number(row.pickup_time_minutes?.toFixed(2)),
+      pickupTimeHours: Number((row.pickup_time_minutes / 60)?.toFixed(2)),
+      reviewTimeMinutes: Number(row.review_time_minutes?.toFixed(2)),
+      reviewTimeHours: Number((row.review_time_minutes / 60)?.toFixed(2)),
+      totalTimeMinutes: Number(row.total_time_minutes?.toFixed(2)),
+      totalTimeHours: Number((row.total_time_minutes / 60)?.toFixed(2)),
     }));
   }
 
