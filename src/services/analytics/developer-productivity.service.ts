@@ -558,7 +558,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
         FROM ${this.getTablePath("MONGO", "pullRequests")} AS pr
         JOIN ${this.getTablePath("MONGO", "commits_view")} AS c
           ON pr._id = c.pull_request_id
-        WHERE pr.closedAt IS NOT NULL
+        WHERE pr.closedAt IS NOT NULL AND pr.closedAt <> ''
           AND pr.status = 'closed'
           AND SAFE_CAST(pr.closedAt AS TIMESTAMP) BETWEEN TIMESTAMP(@startDate) AND TIMESTAMP(@endDate)
           AND pr.organizationId = @organizationId
