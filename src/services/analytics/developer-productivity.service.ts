@@ -588,7 +588,6 @@ export class DeveloperProductivityService extends BigQueryBaseService {
         AND opened_at IS NOT NULL
         AND closed_at IS NOT NULL
         AND first_commit <= last_commit
-        AND last_commit <= opened_at
         AND opened_at <= closed_at
       GROUP BY week_start
       ORDER BY week_start;
