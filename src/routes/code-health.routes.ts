@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { authenticateApiKey } from "../middleware/auth";
 import { Request, Response } from "express";
-import { codeHealthService } from "../services/analytics/code-health-service";
+import { codeHealthService } from "../services/analytics/code-health.service";
 import { AppError } from "../middleware/errorHandler";
 import { cacheMiddleware } from "../middleware/cache.middleware";
 
