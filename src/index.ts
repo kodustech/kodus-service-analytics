@@ -5,6 +5,7 @@ import cors from "cors";
 import rateLimit from "express-rate-limit";
 import { errorHandler } from "./middleware/errorHandler";
 import { analyticsRoutes } from "./routes/index";
+import { healthRoutes } from "./routes/health.routes";
 import { logger } from "./utils/logger";
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger';
@@ -29,6 +30,9 @@ app.use(limiter);
 
 // Documentação Swagger (antes das rotas da API)
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+// Health check routes (sem autenticação)
+app.use("/health", healthRoutes);
 
 // Rotas principais
 app.use("/api", analyticsRoutes);
