@@ -156,3 +156,39 @@ export interface SuggestionsImplementationRate {
   suggestionsImplemented: number;
   implementationRate: number;
 }
+
+// Dashboard consolidado por empresa
+export interface CompanyDashboard {
+  organizationId: string;
+  period: {
+    startDate: string;
+    endDate: string;
+  };
+  metrics: {
+    totalPRs: number;
+    criticalSuggestions: number;
+    totalSuggestions: number;
+    topSuggestionsCategories: {
+      category: string;
+      count: number;
+    }[];
+    topDeveloper: {
+      name: string;
+      totalPRs: number;
+    };
+    companyRanking: {
+      rank: number;
+      totalCompanies: number;
+      percentageOfTotalPRs: number;
+      totalPRsAllCompanies: number;
+    };
+  };
+  additionalMetrics?: {
+    suggestionsAppliedPercentage?: number;
+    suggestionsImplementedCount?: number;
+    cycleTime?: LeadTimeHighlight;
+    deployFrequency?: DeployFrequencyHighlight;
+    bugRatio?: BugRatioHighlight;
+    leadTimeBreakdown?: LeadTimeBreakdownData[];
+  };
+}
