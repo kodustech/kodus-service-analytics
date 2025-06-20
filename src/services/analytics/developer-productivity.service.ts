@@ -746,23 +746,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
         GROUP BY category
         HAVING category IS NOT NULL
       ),
-      dev_with_most_prs AS (
-        -- 9. Dev com mais PRs
-        SELECT
-          JSON_VALUE(auth.author_username) AS developer,
-          COUNT(pr._id) AS pr_count
-        FROM ${pullRequestsTable} AS pr
-        JOIN ${this.getTablePath("MONGO", "pull_request_author_view")} AS auth
-          ON pr._id = auth.pull_request_id
-        WHERE pr.closedAt IS NOT NULL AND pr.closedAt <> ''
-          AND pr.status = 'closed'
-          AND SAFE_CAST(pr.closedAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
-          AND SAFE_CAST(pr.closedAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
-          AND pr.organizationId = @organizationId
-        GROUP BY developer
-        ORDER BY pr_count DESC
-        LIMIT 1
-      ),
+      
       all_companies_total AS (
         -- 10. Total de PRs de todas as empresas para calcular percentual
         SELECT
@@ -804,9 +788,35 @@ export class DeveloperProductivityService extends BigQueryBaseService {
           ORDER BY category_rank
         ) as top_suggestions_categories,
         
-        -- Dev com mais PRs
-        dmp.developer as top_developer,
-        dmp.pr_count as top_developer_prs,
+                 -- Dev com mais PRs (usando scalar subqueries para evitar problema com CROSS JOIN)
+         (
+           SELECT JSON_VALUE(auth.author_username)
+           FROM ${pullRequestsTable} AS pr
+           JOIN ${this.getTablePath("MONGO", "pull_request_author_view")} AS auth
+             ON pr._id = auth.pull_request_id
+           WHERE pr.closedAt IS NOT NULL AND pr.closedAt <> ''
+             AND pr.status = 'closed'
+             AND SAFE_CAST(pr.closedAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
+             AND SAFE_CAST(pr.closedAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
+             AND pr.organizationId = @organizationId
+           GROUP BY JSON_VALUE(auth.author_username)
+           ORDER BY COUNT(pr._id) DESC
+           LIMIT 1
+         ) as top_developer,
+         (
+           SELECT COUNT(pr._id)
+           FROM ${pullRequestsTable} AS pr
+           JOIN ${this.getTablePath("MONGO", "pull_request_author_view")} AS auth
+             ON pr._id = auth.pull_request_id
+           WHERE pr.closedAt IS NOT NULL AND pr.closedAt <> ''
+             AND pr.status = 'closed'
+             AND SAFE_CAST(pr.closedAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
+             AND SAFE_CAST(pr.closedAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
+             AND pr.organizationId = @organizationId
+           GROUP BY JSON_VALUE(auth.author_username)
+           ORDER BY COUNT(pr._id) DESC
+           LIMIT 1
+         ) as top_developer_prs,
         
         -- Percentual e ranking da empresa
         act.total_prs_all_companies,
@@ -814,11 +824,10 @@ export class DeveloperProductivityService extends BigQueryBaseService {
         cr.company_rank,
         ROUND(SAFE_DIVIDE(cm.total_prs, act.total_prs_all_companies) * 100, 2) as company_percentage
         
-      FROM company_metrics cm
-      CROSS JOIN critical_suggestions_metrics csm
-      CROSS JOIN dev_with_most_prs dmp
-      CROSS JOIN all_companies_total act
-      LEFT JOIN company_ranking cr ON cr.organizationId = @organizationId
+             FROM company_metrics cm
+       CROSS JOIN critical_suggestions_metrics csm
+       CROSS JOIN all_companies_total act
+       LEFT JOIN company_ranking cr ON cr.organizationId = @organizationId
     `;
 
     const rows = await this.executeQuery(query, {
@@ -849,11 +858,11 @@ export class DeveloperProductivityService extends BigQueryBaseService {
           count: Number(cat.count),
         })),
         
-        // 9. Dev com mais PRs
-        topDeveloper: {
-          name: result.top_developer || "N/A",
-          totalPRs: Number(result.top_developer_prs || 0),
-        },
+                 // 9. Dev com mais PRs
+         topDeveloper: {
+           name: result.top_developer || "N/A",
+           totalPRs: result.top_developer_prs ? Number(result.top_developer_prs) : 0,
+         },
         
         // 10. Top % de PRs da empresa
         companyRanking: {
