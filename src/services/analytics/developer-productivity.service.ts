@@ -11,8 +11,10 @@ import {
   TABLES,
   LeadTimeHighlight,
   PRSizeHighlight,
+  CompanyDashboard,
 } from "../../types/analytics";
 import { AppError } from "../../middleware/errorHandler";
+import { CodeHealthService } from "./code-health.service";
 
 export class DeveloperProductivityService extends BigQueryBaseService {
   async getDeployFrequencyChartData(params: {
@@ -678,6 +680,264 @@ export class DeveloperProductivityService extends BigQueryBaseService {
       commitCount: Number(row.commit_count),
       prCount: Number(row.pr_count),
     }));
+  }
+
+  /**
+   * Dashboard consolidado com todas as métricas por empresa
+   */
+  async getCompanyDashboard(params: {
+    organizationId: string;
+    startDate: string;
+    endDate: string;
+  }): Promise<CompanyDashboard> {
+    // Validação básica dos parâmetros
+    if (!params.organizationId || !params.startDate || !params.endDate) {
+      throw new AppError(400, "Missing required parameters");
+    }
+
+    // Validação do formato das datas
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(params.startDate) || !dateRegex.test(params.endDate)) {
+      throw new AppError(400, "Invalid date format. Use YYYY-MM-DD");
+    }
+
+    const pullRequestsTable = this.getTablePath("MONGO", TABLES.PULL_REQUESTS);
+
+    const query = `
+      WITH company_metrics AS (
+        -- 1. Quantidade total de PRs da empresa
+        SELECT
+          COUNT(*) as total_prs
+        FROM ${pullRequestsTable} AS pr
+        WHERE pr.closedAt IS NOT NULL AND pr.closedAt <> ''
+          AND pr.status = 'closed'
+          AND SAFE_CAST(pr.closedAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
+          AND SAFE_CAST(pr.closedAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
+          AND pr.organizationId = @organizationId
+      ),
+      critical_suggestions_metrics AS (
+        -- 2. Critical suggestions
+        SELECT
+          COUNT(*) AS total_suggestions,
+          COUNTIF(JSON_VALUE(sug, '$.severity') = 'critical') AS critical_suggestions
+        FROM ${pullRequestsTable} AS pr
+        CROSS JOIN UNNEST(JSON_EXTRACT_ARRAY(files)) AS file_obj
+        CROSS JOIN UNNEST(JSON_EXTRACT_ARRAY(file_obj, '$.suggestions')) AS sug
+        WHERE pr.organizationId = @organizationId
+          AND pr.closedAt IS NOT NULL AND pr.closedAt <> ''
+          AND SAFE_CAST(pr.closedAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
+          AND SAFE_CAST(pr.closedAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
+          AND JSON_VALUE(sug, '$.deliveryStatus') = 'sent'
+      ),
+      top_suggestions_categories AS (
+        -- 4. Top 3 suggestions categories
+        SELECT
+          JSON_VALUE(sug, '$.label') AS category,
+          COUNT(*) AS count,
+          ROW_NUMBER() OVER (ORDER BY COUNT(*) DESC) as category_rank
+        FROM ${pullRequestsTable} AS pr
+        CROSS JOIN UNNEST(JSON_EXTRACT_ARRAY(files)) AS file_obj
+        CROSS JOIN UNNEST(JSON_EXTRACT_ARRAY(file_obj, '$.suggestions')) AS sug
+        WHERE pr.organizationId = @organizationId
+          AND pr.closedAt IS NOT NULL AND pr.closedAt <> ''
+          AND SAFE_CAST(pr.closedAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
+          AND SAFE_CAST(pr.closedAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
+          AND JSON_VALUE(sug, '$.deliveryStatus') = 'sent'
+        GROUP BY category
+        HAVING category IS NOT NULL
+      ),
+      
+      all_companies_total AS (
+        -- 10. Total de PRs de todas as empresas para calcular percentual
+        SELECT
+          COUNT(*) as total_prs_all_companies,
+          COUNT(DISTINCT pr.organizationId) as total_companies
+        FROM ${pullRequestsTable} AS pr
+        WHERE pr.closedAt IS NOT NULL AND pr.closedAt <> ''
+          AND pr.status = 'closed'
+          AND SAFE_CAST(pr.closedAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
+          AND SAFE_CAST(pr.closedAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
+      ),
+      company_ranking AS (
+        -- Ranking da empresa entre todas
+        SELECT
+          pr.organizationId,
+          COUNT(*) as company_prs,
+          ROW_NUMBER() OVER (ORDER BY COUNT(*) DESC) as company_rank
+        FROM ${pullRequestsTable} AS pr
+        WHERE pr.closedAt IS NOT NULL AND pr.closedAt <> ''
+          AND pr.status = 'closed'
+          AND SAFE_CAST(pr.closedAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
+          AND SAFE_CAST(pr.closedAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
+        GROUP BY pr.organizationId
+      )
+      
+      SELECT
+        -- Métricas da empresa
+        cm.total_prs,
+        
+        -- Critical suggestions
+        csm.total_suggestions,
+        csm.critical_suggestions,
+        
+        -- Top 3 categorias (como JSON array)
+        ARRAY(
+          SELECT AS STRUCT category, count
+          FROM top_suggestions_categories
+          WHERE category_rank <= 3
+          ORDER BY category_rank
+        ) as top_suggestions_categories,
+        
+                 -- Dev com mais PRs (usando scalar subqueries para evitar problema com CROSS JOIN)
+         (
+           SELECT JSON_VALUE(auth.author_username)
+           FROM ${pullRequestsTable} AS pr
+           JOIN ${this.getTablePath("MONGO", "pull_request_author_view")} AS auth
+             ON pr._id = auth.pull_request_id
+           WHERE pr.closedAt IS NOT NULL AND pr.closedAt <> ''
+             AND pr.status = 'closed'
+             AND SAFE_CAST(pr.closedAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
+             AND SAFE_CAST(pr.closedAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
+             AND pr.organizationId = @organizationId
+           GROUP BY JSON_VALUE(auth.author_username)
+           ORDER BY COUNT(pr._id) DESC
+           LIMIT 1
+         ) as top_developer,
+         (
+           SELECT COUNT(pr._id)
+           FROM ${pullRequestsTable} AS pr
+           JOIN ${this.getTablePath("MONGO", "pull_request_author_view")} AS auth
+             ON pr._id = auth.pull_request_id
+           WHERE pr.closedAt IS NOT NULL AND pr.closedAt <> ''
+             AND pr.status = 'closed'
+             AND SAFE_CAST(pr.closedAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
+             AND SAFE_CAST(pr.closedAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
+             AND pr.organizationId = @organizationId
+           GROUP BY JSON_VALUE(auth.author_username)
+           ORDER BY COUNT(pr._id) DESC
+           LIMIT 1
+         ) as top_developer_prs,
+        
+        -- Percentual e ranking da empresa
+        act.total_prs_all_companies,
+        act.total_companies,
+        cr.company_rank,
+        ROUND(SAFE_DIVIDE(cm.total_prs, act.total_prs_all_companies) * 100, 2) as company_percentage
+        
+             FROM company_metrics cm
+       CROSS JOIN critical_suggestions_metrics csm
+       CROSS JOIN all_companies_total act
+       LEFT JOIN company_ranking cr ON cr.organizationId = @organizationId
+    `;
+
+    const rows = await this.executeQuery(query, {
+      startDate: params.startDate,
+      endDate: params.endDate,
+      organizationId: params.organizationId,
+    });
+
+    const result = rows[0] || {};
+
+    return {
+      organizationId: params.organizationId,
+      period: {
+        startDate: params.startDate,
+        endDate: params.endDate,
+      },
+      metrics: {
+        // 1. Quantidade de PRs
+        totalPRs: Number(result.total_prs || 0),
+        
+        // 2. Critical suggestions
+        criticalSuggestions: Number(result.critical_suggestions || 0),
+        totalSuggestions: Number(result.total_suggestions || 0),
+        
+        // 4. Top 3 suggestions categories
+        topSuggestionsCategories: (result.top_suggestions_categories || []).map((cat: any) => ({
+          category: cat.category,
+          count: Number(cat.count),
+        })),
+        
+                 // 9. Dev com mais PRs
+         topDeveloper: {
+           name: result.top_developer || "N/A",
+           totalPRs: result.top_developer_prs ? Number(result.top_developer_prs) : 0,
+         },
+        
+        // 10. Top % de PRs da empresa
+        companyRanking: {
+          rank: Number(result.company_rank || 0),
+          totalCompanies: Number(result.total_companies || 0),
+          percentageOfTotalPRs: Number(result.company_percentage || 0),
+          totalPRsAllCompanies: Number(result.total_prs_all_companies || 0),
+        },
+      },
+      
+      // Métricas que precisam de calls separados (já implementadas)
+      // Estas serão chamadas separadamente para manter performance
+      additionalMetrics: {
+        // 3. Suggestions Applied % - precisa chamar getSuggestionsImplementationRate
+        // 5. Cycle Time - precisa chamar getPullRequestLeadTimeHighlight  
+        // 6. Deploy Frequency - precisa chamar getDeployFrequencyHighlight
+        // 7. Bug Ratio - precisa chamar getBugRatioHighlight
+        // 8. Review Time / Lead time breakdown - precisa chamar getLeadTimeBreakdownData
+        // 11. Qnt de sugestões implementadas - mesmo que #3 mas número absoluto
+      },
+    };
+  }
+
+  /**
+   * Dashboard completo com todas as métricas (chama os outros métodos)
+   */
+  async getCompleteDashboard(params: {
+    organizationId: string;
+    startDate: string;
+    endDate: string;
+  }): Promise<CompanyDashboard> {
+    const codeHealthService = new CodeHealthService();
+    
+    // Chamadas paralelas para melhor performance
+    const [
+      basicMetrics,
+      suggestionsImplementation,
+      leadTimeHighlight,
+      deployFrequency,
+      bugRatio,
+      leadTimeBreakdown,
+    ] = await Promise.all([
+      this.getCompanyDashboard(params),
+      codeHealthService.getSuggestionsImplementationRate({
+        organizationId: params.organizationId,
+      }),
+      this.getPullRequestLeadTimeHighlight(
+        params.organizationId,
+        params.startDate,
+        params.endDate
+      ),
+      this.getDeployFrequencyHighlight(
+        params.organizationId,
+        params.startDate,
+        params.endDate
+      ),
+      codeHealthService.getBugRatioHighlight({
+        organizationId: params.organizationId,
+        startDate: params.startDate,
+        endDate: params.endDate,
+      }),
+      this.getLeadTimeBreakdownData(params),
+    ]);
+
+    return {
+      ...basicMetrics,
+      additionalMetrics: {
+        suggestionsAppliedPercentage: suggestionsImplementation.implementationRate,
+        suggestionsImplementedCount: suggestionsImplementation.suggestionsImplemented,
+        cycleTime: leadTimeHighlight,
+        deployFrequency: deployFrequency,
+        bugRatio: bugRatio,
+        leadTimeBreakdown: leadTimeBreakdown,
+      },
+    };
   }
 }
 

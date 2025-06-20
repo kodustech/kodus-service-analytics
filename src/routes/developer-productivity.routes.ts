@@ -837,4 +837,163 @@ router.get(
   }
 );
 
+/**
+ * @swagger
+ * /api/productivity/dashboard/company:
+ *   get:
+ *     summary: Dashboard consolidado com todas as métricas por empresa
+ *     tags: [Developer Productivity]
+ *     security:
+ *       - ApiKeyAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: organizationId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID da organização
+ *       - in: query
+ *         name: startDate
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Data inicial (formato YYYY-MM-DD)
+ *       - in: query
+ *         name: endDate
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Data final (formato YYYY-MM-DD)
+ *       - in: query
+ *         name: complete
+ *         required: false
+ *         schema:
+ *           type: boolean
+ *           default: false
+ *         description: Se true, retorna todas as métricas. Se false, retorna apenas métricas básicas
+ *     responses:
+ *       200:
+ *         description: Dashboard consolidado com todas as métricas da empresa
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: "success"
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     organizationId:
+ *                       type: string
+ *                     period:
+ *                       type: object
+ *                       properties:
+ *                         startDate:
+ *                           type: string
+ *                         endDate:
+ *                           type: string
+ *                     metrics:
+ *                       type: object
+ *                       properties:
+ *                         totalPRs:
+ *                           type: number
+ *                           description: Quantidade total de PRs
+ *                         criticalSuggestions:
+ *                           type: number
+ *                           description: Número de sugestões críticas
+ *                         totalSuggestions:
+ *                           type: number
+ *                           description: Total de sugestões
+ *                         topSuggestionsCategories:
+ *                           type: array
+ *                           description: Top 3 categorias de sugestões
+ *                           items:
+ *                             type: object
+ *                             properties:
+ *                               category:
+ *                                 type: string
+ *                               count:
+ *                                 type: number
+ *                         topDeveloper:
+ *                           type: object
+ *                           description: Desenvolvedor com mais PRs
+ *                           properties:
+ *                             name:
+ *                               type: string
+ *                             totalPRs:
+ *                               type: number
+ *                         companyRanking:
+ *                           type: object
+ *                           description: Ranking da empresa comparado com outras
+ *                           properties:
+ *                             rank:
+ *                               type: number
+ *                             totalCompanies:
+ *                               type: number
+ *                             percentageOfTotalPRs:
+ *                               type: number
+ *                             totalPRsAllCompanies:
+ *                               type: number
+ *                     additionalMetrics:
+ *                       type: object
+ *                       description: Métricas adicionais (apenas se complete=true)
+ *                       properties:
+ *                         suggestionsAppliedPercentage:
+ *                           type: number
+ *                         suggestionsImplementedCount:
+ *                           type: number
+ *                         cycleTime:
+ *                           type: object
+ *                         deployFrequency:
+ *                           type: object
+ *                         bugRatio:
+ *                           type: object
+ *                         leadTimeBreakdown:
+ *                           type: array
+ *       401:
+ *         description: Não autorizado - API key inválida ou ausente
+ *       400:
+ *         description: Parâmetros obrigatórios faltando
+ *       500:
+ *         description: Erro interno do servidor
+ */
+router.get(
+  "/dashboard/company",
+  async (req: Request, res: Response) => {
+    try {
+      const { organizationId, startDate, endDate, complete } = req.query;
+
+      if (!organizationId || !startDate || !endDate) {
+        return res.status(400).json({
+          error: "Missing required parameters: organizationId, startDate, endDate",
+        });
+      }
+
+      const isComplete = complete === 'true';
+
+      const data = isComplete
+        ? await developerProductivityService.getCompleteDashboard({
+            organizationId: organizationId as string,
+            startDate: startDate as string,
+            endDate: endDate as string,
+          })
+        : await developerProductivityService.getCompanyDashboard({
+            organizationId: organizationId as string,
+            startDate: startDate as string,
+            endDate: endDate as string,
+          });
+
+      return res.json({
+        status: "success",
+        data,
+      });
+    } catch (error) {
+      console.error("Error fetching company dashboard:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
+
 export const developerProductivityRoutes = router;
