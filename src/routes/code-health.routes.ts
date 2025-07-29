@@ -49,6 +49,12 @@ router.use(cacheMiddleware(900));
  *         schema:
  *           type: string
  *         description: Data final (formato YYYY-MM-DD)
+ *       - in: query
+ *         name: repository
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Nome do repositório para filtrar os dados
  *     responses:
  *       200:
  *         description: Lista de sugestões por categoria
@@ -80,7 +86,7 @@ router.get(
   "/charts/suggestions-by-category",
   async (req: Request, res: Response) => {
     try {
-      const { organizationId, startDate, endDate } = req.query;
+      const { organizationId, startDate, endDate, repository } = req.query;
 
       if (!organizationId || !startDate || !endDate) {
         return res.status(400).json({
@@ -93,6 +99,7 @@ router.get(
         organizationId: organizationId as string,
         startDate: startDate as string,
         endDate: endDate as string,
+        repository: repository as string | undefined,
       });
 
       return res.json({
@@ -133,6 +140,12 @@ router.get(
  *         schema:
  *           type: string
  *         description: Data final (formato YYYY-MM-DD)
+ *       - in: query
+ *         name: repository
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Nome do repositório para filtrar os dados
  *     responses:
  *       200:
  *         description: Lista de sugestões por repositório
@@ -162,7 +175,7 @@ router.get(
   "/charts/suggestions-by-repository",
   async (req: Request, res: Response) => {
     try {
-      const { organizationId, startDate, endDate } = req.query;
+      const { organizationId, startDate, endDate, repository } = req.query;
 
       if (!organizationId || !startDate || !endDate) {
         return res.status(400).json({
@@ -175,6 +188,7 @@ router.get(
         organizationId: organizationId as string,
         startDate: startDate as string,
         endDate: endDate as string,
+        repository: repository as string | undefined,
       });
 
       return res.json({
@@ -215,6 +229,12 @@ router.get(
  *         schema:
  *           type: string
  *         description: Data final (formato YYYY-MM-DD)
+ *       - in: query
+ *         name: repository
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Nome do repositório para filtrar os dados
  *     responses:
  *       200:
  *         description: Lista de dados semanais do bug ratio
@@ -245,7 +265,7 @@ router.get(
  *         description: Erro interno do servidor
  */
 router.get("/charts/bug-ratio", async (req: Request, res: Response) => {
-  const { organizationId, startDate, endDate } = req.query;
+  const { organizationId, startDate, endDate, repository } = req.query;
 
   if (!organizationId || !startDate || !endDate) {
     throw new AppError(400, "Missing required parameters");
@@ -255,6 +275,7 @@ router.get("/charts/bug-ratio", async (req: Request, res: Response) => {
     organizationId: organizationId as string,
     startDate: startDate as string,
     endDate: endDate as string,
+    repository: repository as string | undefined,
   });
 
   res.json(data);
@@ -287,6 +308,12 @@ router.get("/charts/bug-ratio", async (req: Request, res: Response) => {
  *         schema:
  *           type: string
  *         description: Data final (formato YYYY-MM-DD)
+ *       - in: query
+ *         name: repository
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Nome do repositório para filtrar os dados
  *     responses:
  *       200:
  *         description: Dados do bug ratio com comparação ao período anterior
@@ -344,7 +371,7 @@ router.get("/charts/bug-ratio", async (req: Request, res: Response) => {
  */
 router.get("/highlights/bug-ratio", async (req: Request, res: Response) => {
   try {
-    const { organizationId, startDate, endDate } = req.query;
+    const { organizationId, startDate, endDate, repository } = req.query;
 
     if (!organizationId || !startDate || !endDate) {
       return res.status(400).json({
@@ -357,6 +384,7 @@ router.get("/highlights/bug-ratio", async (req: Request, res: Response) => {
       organizationId: organizationId as string,
       startDate: startDate as string,
       endDate: endDate as string,
+      repository: repository as string | undefined,
     });
 
     return res.json({
@@ -376,12 +404,44 @@ router.get("/highlights/bug-ratio", async (req: Request, res: Response) => {
  *     summary: Obtém a taxa de implementação de sugestões
  *     tags: [Code Health]
  *     security:
- *
+ *       - ApiKeyAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: organizationId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID da organização
+ *       - in: query
+ *         name: repository
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Nome do repositório para filtrar os dados
+ *     responses:
+ *       200:
+ *         description: Taxa de implementação de sugestões
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: "success"
+ *                 data:
+ *                   type: object
+ *       401:
+ *         description: Não autorizado - API key inválida ou ausente
+ *       400:
+ *         description: Parâmetros obrigatórios faltando
+ *       500:
+ *         description: Erro interno do servidor
  */
 router.get(
   "/highlights/suggestions-implementation-rate",
   async (req: Request, res: Response) => {
-    const { organizationId } = req.query;
+    const { organizationId, repository } = req.query;
 
     if (!organizationId) {
       return res.status(400).json({ error: "Missing required parameters" });
@@ -389,6 +449,7 @@ router.get(
 
     const data = await codeHealthService.getSuggestionsImplementationRate({
       organizationId: organizationId as string,
+      repository: repository as string | undefined,
     });
 
     return res.json({

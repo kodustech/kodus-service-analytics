@@ -39,6 +39,12 @@ router.use(cacheMiddleware(900));
  *         schema:
  *           type: string
  *         description: Data final (formato YYYY-MM-DD)
+ *       - in: query
+ *         name: repository
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Nome do repositório para filtrar os dados
  *     responses:
  *       200:
  *         description: Frequência de deploys por período
@@ -68,7 +74,7 @@ router.use(cacheMiddleware(900));
  */
 router.get("/charts/deploy-frequency", async (req, res, next) => {
   try {
-    const { organizationId, startDate, endDate } = req.query;
+    const { organizationId, startDate, endDate, repository } = req.query;
 
     if (!organizationId || !startDate || !endDate) {
       return res.status(400).json({
@@ -122,6 +128,12 @@ router.get("/charts/deploy-frequency", async (req, res, next) => {
  *         schema:
  *           type: string
  *         description: Data final (formato YYYY-MM-DD)
+ *       - in: query
+ *         name: repository
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Nome do repositório para filtrar os dados
  *     responses:
  *       200:
  *         description: Dados da frequência de deploys com comparação ao período anterior
@@ -175,7 +187,7 @@ router.get(
   "/highlights/deploy-frequency",
   async (req: Request, res: Response) => {
     try {
-      const { organizationId, startDate, endDate } = req.query;
+      const { organizationId, startDate, endDate, repository } = req.query;
 
       if (!organizationId || !startDate || !endDate) {
         return res.status(400).json({
@@ -227,6 +239,12 @@ router.get(
  *         schema:
  *           type: string
  *         description: Data final (formato YYYY-MM-DD)
+ *       - in: query
+ *         name: repository
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Nome do repositório para filtrar os dados
  *     responses:
  *       200:
  *         description: Dados do lead time com comparação ao período anterior
@@ -280,7 +298,7 @@ router.get(
   "/highlights/lead-time-for-change",
   async (req: Request, res: Response) => {
     try {
-      const { organizationId, startDate, endDate } = req.query;
+      const { organizationId, startDate, endDate, repository } = req.query;
 
       if (!organizationId || !startDate || !endDate) {
         return res.status(400).json({
@@ -292,7 +310,8 @@ router.get(
       const data = await developerProductivityService.getPullRequestLeadTimeHighlight(
         organizationId as string,
         startDate as string,
-        endDate as string
+        endDate as string,
+        repository as string | undefined
       );
 
       return res.json({
@@ -333,6 +352,12 @@ router.get(
  *         schema:
  *           type: string
  *         description: Data final (formato YYYY-MM-DD)
+ *       - in: query
+ *         name: repository
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Nome do repositório para filtrar os dados
  *     responses:
  *       200:
  *         description: Lead time médio por período
@@ -364,7 +389,7 @@ router.get(
   "/charts/lead-time-for-change",
   async (req: Request, res: Response) => {
     try {
-      const { organizationId, startDate, endDate } = req.query;
+      const { organizationId, startDate, endDate, repository } = req.query;
 
       if (!organizationId || !startDate || !endDate) {
         return res.status(400).json({
@@ -377,6 +402,7 @@ router.get(
         organizationId: organizationId as string,
         startDate: startDate as string,
         endDate: endDate as string,
+        repository: repository as string | undefined,
       });
 
       return res.json({
@@ -417,6 +443,12 @@ router.get(
  *         schema:
  *           type: string
  *         description: Data final (formato YYYY-MM-DD)
+ *       - in: query
+ *         name: repository
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Nome do repositório para filtrar os dados
  *     responses:
  *       200:
  *         description: Dados do tamanho médio dos PRs com comparação ao período anterior
@@ -468,7 +500,7 @@ router.get(
  */
 router.get("/highlights/pr-size", async (req: Request, res: Response) => {
   try {
-    const { organizationId, startDate, endDate } = req.query;
+    const { organizationId, startDate, endDate, repository } = req.query;
 
     if (!organizationId || !startDate || !endDate) {
       return res.status(400).json({
@@ -480,7 +512,8 @@ router.get("/highlights/pr-size", async (req: Request, res: Response) => {
     const data = await developerProductivityService.getPullRequestSizeHighlight(
       organizationId as string,
       startDate as string,
-      endDate as string
+      endDate as string,
+      repository as string | undefined
     );
 
     return res.json({
@@ -520,6 +553,12 @@ router.get("/highlights/pr-size", async (req: Request, res: Response) => {
  *         schema:
  *           type: string
  *         description: Data final (formato YYYY-MM-DD)
+ *       - in: query
+ *         name: repository
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Nome do repositório para filtrar os dados
  *     responses:
  *       200:
  *         description: Estatísticas de PRs por desenvolvedor
@@ -551,7 +590,7 @@ router.get(
   "/charts/pull-requests-by-developer",
   async (req: Request, res: Response) => {
     try {
-      const { organizationId, startDate, endDate } = req.query;
+      const { organizationId, startDate, endDate, repository } = req.query;
 
       if (!organizationId || !startDate || !endDate) {
         return res.status(400).json({
@@ -565,7 +604,8 @@ router.get(
           organizationId: organizationId as string,
           startDate: startDate as string,
           endDate: endDate as string,
-        });
+          repository: repository as string | undefined,
+          });
 
       return res.json({
         status: "success",
@@ -605,6 +645,12 @@ router.get(
  *         schema:
  *           type: string
  *         description: Data final (formato YYYY-MM-DD)
+ *       - in: query
+ *         name: repository
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Nome do repositório para filtrar os dados
  *     responses:
  *       200:
  *         description: Comparação de PRs abertos vs fechados
@@ -638,7 +684,7 @@ router.get(
   "/charts/pull-requests-opened-vs-closed",
   async (req: Request, res: Response) => {
     try {
-      const { organizationId, startDate, endDate } = req.query;
+      const { organizationId, startDate, endDate, repository } = req.query;
 
       if (!organizationId || !startDate || !endDate) {
         return res.status(400).json({
@@ -652,7 +698,8 @@ router.get(
           organizationId: organizationId as string,
           startDate: startDate as string,
           endDate: endDate as string,
-        });
+          repository: repository as string | undefined,
+          });
 
       return res.json({
         status: "success",
@@ -692,6 +739,12 @@ router.get(
  *         schema:
  *           type: string
  *         description: Data final (formato YYYY-MM-DD)
+ *       - in: query
+ *         name: repository
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Nome do repositório para filtrar os dados
  *     responses:
  *       200:
  *         description: Detalhamento das etapas do lead time
@@ -723,7 +776,7 @@ router.get(
   "/charts/lead-time-breakdown",
   async (req: Request, res: Response) => {
     try {
-      const { organizationId, startDate, endDate } = req.query;
+      const { organizationId, startDate, endDate, repository } = req.query;
 
       if (!organizationId || !startDate || !endDate) {
         return res.status(400).json({
@@ -736,6 +789,7 @@ router.get(
         organizationId: organizationId as string,
         startDate: startDate as string,
         endDate: endDate as string,
+        repository: repository as string | undefined,
       });
 
       return res.json({
@@ -776,6 +830,12 @@ router.get(
  *         schema:
  *           type: string
  *         description: Data final (formato YYYY-MM-DD)
+ *       - in: query
+ *         name: repository
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Nome do repositório para filtrar os dados
  *     responses:
  *       200:
  *         description: Métricas de atividade dos desenvolvedores
@@ -811,7 +871,7 @@ router.get(
   "/charts/developer-activity",
   async (req: Request, res: Response) => {
     try {
-      const { organizationId, startDate, endDate } = req.query;
+      const { organizationId, startDate, endDate, repository } = req.query;
 
       if (!organizationId || !startDate || !endDate) {
         return res.status(400).json({
@@ -824,6 +884,7 @@ router.get(
         organizationId: organizationId as string,
         startDate: startDate as string,
         endDate: endDate as string,
+        repository: repository as string | undefined,
       });
 
       return res.json({
@@ -864,6 +925,12 @@ router.get(
  *         schema:
  *           type: string
  *         description: Data final (formato YYYY-MM-DD)
+ *       - in: query
+ *         name: repository
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Nome do repositório para filtrar os dados
  *       - in: query
  *         name: complete
  *         required: false
@@ -963,7 +1030,7 @@ router.get(
   "/dashboard/company",
   async (req: Request, res: Response) => {
     try {
-      const { organizationId, startDate, endDate, complete } = req.query;
+      const { organizationId, startDate, endDate, repository, complete } = req.query;
 
       if (!organizationId || !startDate || !endDate) {
         return res.status(400).json({
@@ -978,12 +1045,14 @@ router.get(
             organizationId: organizationId as string,
             startDate: startDate as string,
             endDate: endDate as string,
-          })
+            repository: repository as string | undefined,
+              })
         : await developerProductivityService.getCompanyDashboard({
             organizationId: organizationId as string,
             startDate: startDate as string,
             endDate: endDate as string,
-          });
+            repository: repository as string | undefined,
+              });
 
       return res.json({
         status: "success",
