@@ -20,15 +20,15 @@ export class CodeHealthService extends BigQueryBaseService {
           SELECT
             JSON_VALUE(sug, '$.label') AS suggestion_category,
             COUNT(*) AS suggestions_count
-          FROM ${this.getTablePath("MONGO", "pullRequests")} AS pr
+          FROM ${this.getTablePath("MONGO", "pullRequests_opt")} AS pr
           CROSS JOIN UNNEST(JSON_EXTRACT_ARRAY(pr.files)) AS file_obj
           CROSS JOIN UNNEST(JSON_EXTRACT_ARRAY(file_obj, '$.suggestions')) AS sug
           WHERE pr.organizationId = @organizationId
             AND pr.closedAt IS NOT NULL 
             AND pr.closedAt <> ''
-            AND TIMESTAMP(pr.closedAt) BETWEEN TIMESTAMP(@startDate) AND TIMESTAMP(@endDate)
+            AND pr.parsed_closed_at BETWEEN TIMESTAMP(@startDate) AND TIMESTAMP(@endDate)
             AND JSON_VALUE(sug, '$.deliveryStatus') = 'sent'
-            ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
+            ${params.repository ? "AND pr.repo_full_name = @repository" : ""}
           GROUP BY suggestion_category
           ORDER BY suggestions_count DESC;
         `;
@@ -55,18 +55,18 @@ export class CodeHealthService extends BigQueryBaseService {
     const query = `
           WITH repo_suggestions AS (
             SELECT
-              JSON_VALUE(pr.repository, '$.fullName') AS repository,
+              pr.repo_full_name AS repository,
               JSON_VALUE(sug, '$.label') AS suggestion_category,
               COUNT(*) AS suggestions_count
-            FROM ${this.getTablePath("MONGO", "pullRequests")} AS pr
+            FROM ${this.getTablePath("MONGO", "pullRequests_opt")} AS pr
             CROSS JOIN UNNEST(JSON_EXTRACT_ARRAY(files)) AS file_obj
             CROSS JOIN UNNEST(JSON_EXTRACT_ARRAY(file_obj, '$.suggestions')) AS sug
             WHERE pr.organizationId = @organizationId
               AND pr.closedAt IS NOT NULL 
               AND pr.closedAt <> ''
-              AND TIMESTAMP(pr.closedAt) BETWEEN TIMESTAMP(@startDate) AND TIMESTAMP(@endDate)
+              AND pr.parsed_closed_at BETWEEN TIMESTAMP(@startDate) AND TIMESTAMP(@endDate)
               AND JSON_VALUE(sug, '$.deliveryStatus') = 'sent'
-              ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
+              ${params.repository ? "AND pr.repo_full_name = @repository" : ""}
             GROUP BY repository, suggestion_category
           )
           SELECT
@@ -113,7 +113,7 @@ export class CodeHealthService extends BigQueryBaseService {
     const query = `
       WITH weekly_prs AS (
         SELECT
-          TIMESTAMP_TRUNC(TIMESTAMP(pr.closedAt), WEEK(MONDAY)) AS week_start,
+          TIMESTAMP_TRUNC(pr.parsed_closed_at, WEEK(MONDAY)) AS week_start,
           COUNT(*) as total_prs,
           COUNTIF(prt.type = 'Bug Fix') as bug_fix_prs,
           SAFE_DIVIDE(COUNTIF(prt.type = 'Bug Fix'), COUNT(*)) as ratio
@@ -122,9 +122,9 @@ export class CodeHealthService extends BigQueryBaseService {
           ON pr._id = prt.pullRequestId
         WHERE pr.closedAt IS NOT NULL AND pr.closedAt <> ''
           AND pr.status = 'closed'
-          AND TIMESTAMP(pr.closedAt) BETWEEN TIMESTAMP(@startDate) AND TIMESTAMP(@endDate)
+          AND pr.parsed_closed_at BETWEEN TIMESTAMP(@startDate) AND TIMESTAMP(@endDate)
           AND pr.organizationId = @organizationId
-          ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
+          ${params.repository ? "AND pr.repo_full_name = @repository" : ""}
         GROUP BY week_start
       )
       SELECT
@@ -194,9 +194,9 @@ export class CodeHealthService extends BigQueryBaseService {
           ON pr._id = prt.pullRequestId
         WHERE pr.closedAt IS NOT NULL AND pr.closedAt <> ''   
           AND pr.status = 'closed'
-          AND DATE(TIMESTAMP(pr.closedAt)) BETWEEN DATE(@startDate) AND DATE(@endDate)
+          AND pr.parsed_closed_at BETWEEN TIMESTAMP(@startDate) AND TIMESTAMP(@endDate)
           AND pr.organizationId = @organizationId
-          ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
+          ${params.repository ? "AND pr.repo_full_name = @repository" : ""}
       ),
       previous_period AS (
         SELECT
@@ -208,9 +208,9 @@ export class CodeHealthService extends BigQueryBaseService {
           ON pr._id = prt.pullRequestId
         WHERE pr.closedAt IS NOT NULL AND pr.closedAt <> ''
           AND pr.status = 'closed'
-          AND DATE(TIMESTAMP(pr.closedAt)) BETWEEN DATE(@previousStartDate) AND DATE(@previousEndDate)
+          AND pr.parsed_closed_at BETWEEN TIMESTAMP(@previousStartDate) AND TIMESTAMP(@previousEndDate)
           AND pr.organizationId = @organizationId
-          ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
+          ${params.repository ? "AND pr.repo_full_name = @repository" : ""}
       )
       SELECT
         c.total_prs as current_total_prs,
@@ -297,7 +297,7 @@ export class CodeHealthService extends BigQueryBaseService {
   }): Promise<SuggestionsImplementationRate> {
     const suggestionsViewTable = this.getTablePath(
       "MONGO",
-      TABLES.SUGGESTIONS_VIEW
+      TABLES.SUGGESTIONS_VIEW_VM
     );
 
     const pullRequestsTable = this.getTablePath("MONGO", TABLES.PULL_REQUESTS);
@@ -307,27 +307,33 @@ export class CodeHealthService extends BigQueryBaseService {
       TABLES.ORGANIZATION
     );
 
-    const query = `SELECT
-  COUNT(*) AS suggestions_sent,
-  SUM(CASE 
-        WHEN suggestionImplementationStatus IN ('implemented', 'partially_implemented') 
-        THEN 1 
-        ELSE 0 
-      END) AS suggestions_implemented,
-  SAFE_DIVIDE(
-    SUM(CASE WHEN suggestionImplementationStatus IN ('implemented', 'partially_implemented') THEN 1 ELSE 0 END),
-    COUNT(*)
-  ) AS implementation_rate
-FROM ${suggestionsViewTable} as sv
-INNER JOIN ${pullRequestsTable} as pr
-  ON sv.pullRequestId = pr._id 
-INNER JOIN ${organizationTable} as o
-  ON o.uuid = pr.organizationId
-WHERE sv.suggestionDeliveryStatus = 'sent'
-  AND o.uuid = @organizationId
-  AND DATE(TIMESTAMP(suggestionCreatedAt)) >= DATE_SUB(CURRENT_DATE(), INTERVAL 2 WEEK)
-  ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""};
-`;
+    const query = `
+    WITH sv AS (               -- só o delta de 2 semanas, deliveryStatus = 'sent'
+      SELECT *
+      FROM   ${suggestionsViewTable}
+      WHERE  suggestionDeliveryStatus = 'sent'
+        AND  DATE(suggestionCreatedAt) >= DATE_SUB(CURRENT_DATE(), INTERVAL 2 WEEK)
+    ),
+    pr AS (                    -- apenas PRs da empresa (e repo, se filtrado)
+      SELECT _id
+      FROM   ${pullRequestsTable}
+      WHERE  organizationId = @organizationId
+        ${params.repository ? "AND repo_full_name = @repository" : ""}
+    )
+    SELECT
+      COUNT(*) AS suggestions_sent,
+      SUM(CASE
+            WHEN suggestionImplementationStatus IN ('implemented','partially_implemented')
+            THEN 1 ELSE 0
+          END) AS suggestions_implemented,
+      SAFE_DIVIDE(
+        SUM(CASE WHEN suggestionImplementationStatus IN ('implemented','partially_implemented') THEN 1 ELSE 0 END),
+        COUNT(*)
+      ) AS implementation_rate
+    FROM sv
+    JOIN pr
+      ON sv.pullRequestId = pr._id;
+  `;
 
     const rows = await this.executeQuery(query, {
       organizationId: params.organizationId,

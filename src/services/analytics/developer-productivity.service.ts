@@ -38,16 +38,16 @@ export class DeveloperProductivityService extends BigQueryBaseService {
 
     const query = `
       SELECT
-        DATE(DATE_TRUNC(SAFE_CAST(closedAt AS TIMESTAMP), WEEK(MONDAY))) AS week_start,
+        DATE(DATE_TRUNC(pr.parsed_closed_at, WEEK(MONDAY))) AS week_start,
         COUNT(*) AS pr_count
       FROM ${pullRequestsTable} AS pr
       WHERE 1=1
         AND closedAt IS NOT NULL
         AND status = 'closed'
-        AND SAFE_CAST(closedAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
-        AND SAFE_CAST(closedAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
+        AND pr.parsed_closed_at >= TIMESTAMP(@startDate)
+        AND pr.parsed_closed_at <= TIMESTAMP(@endDate)
         AND organizationId = @organizationId
-        ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
+        ${params.repository ? "AND pr.repo_full_name = @repository" : ""}
       GROUP BY week_start
       ORDER BY week_start
     `;
@@ -103,10 +103,10 @@ export class DeveloperProductivityService extends BigQueryBaseService {
         FROM ${pullRequestsTable}
         WHERE closedAt IS NOT NULL AND closedAt <> ''
           AND status = 'closed'
-          AND DATE(closedAt) >= DATE(@currentStartDate)
-          AND DATE(closedAt) <= DATE(@currentEndDate)
+          AND parsed_closed_at >= TIMESTAMP(@currentStartDate)
+          AND parsed_closed_at <= TIMESTAMP(@currentEndDate)
           AND organizationId = @organizationId
-          ${repository ? "AND JSON_VALUE(repository, '$.fullName') = @repository" : ""}
+          ${repository ? "AND repo_full_name = @repository" : ""}
       ),
       previous_period AS (
         SELECT
@@ -115,10 +115,10 @@ export class DeveloperProductivityService extends BigQueryBaseService {
         FROM ${pullRequestsTable}
         WHERE closedAt IS NOT NULL AND closedAt <> ''
           AND status = 'closed'
-          AND DATE(closedAt) >= DATE(@previousStartDate)
-          AND DATE(closedAt) <= DATE(@previousEndDate)
+          AND parsed_closed_at >= TIMESTAMP(@previousStartDate)
+          AND parsed_closed_at <= TIMESTAMP(@previousEndDate)
           AND organizationId = @organizationId
-          ${repository ? "AND JSON_VALUE(repository, '$.fullName') = @repository" : ""}
+          ${repository ? "AND repo_full_name = @repository" : ""}
       )
       SELECT
         c.total_deployments as current_total_deployments,
@@ -205,24 +205,24 @@ export class DeveloperProductivityService extends BigQueryBaseService {
       WITH pr_lead_times AS (
         SELECT
           CASE
-            WHEN SAFE_CAST(pr.closedAt AS TIMESTAMP) BETWEEN TIMESTAMP(@currentStartDate) AND TIMESTAMP(@currentEndDate)
+            WHEN pr.parsed_closed_at BETWEEN TIMESTAMP(@currentStartDate) AND TIMESTAMP(@currentEndDate)
             THEN 'current'
             ELSE 'previous'
           END as period,
           TIMESTAMP_DIFF(
-            SAFE_CAST(pr.closedAt AS TIMESTAMP),
+            pr.parsed_closed_at,
             SAFE_CAST(MIN(JSON_VALUE(c.commit_timestamp)) AS TIMESTAMP),
             MINUTE
           ) as lead_time_minutes
-        FROM ${this.getTablePath("MONGO", "pullRequests")} AS pr
+        FROM ${this.getTablePath("MONGO", "pullRequests_opt")} AS pr
         JOIN ${this.getTablePath("MONGO", "commits_view")} AS c
           ON pr._id = c.pull_request_id
         WHERE pr.closedAt IS NOT NULL AND pr.closedAt <> ''
           AND pr.status = 'closed'
-          AND SAFE_CAST(pr.closedAt AS TIMESTAMP) BETWEEN TIMESTAMP(@previousStartDate) AND TIMESTAMP(@currentEndDate)
+          AND pr.parsed_closed_at BETWEEN TIMESTAMP(@previousStartDate) AND TIMESTAMP(@currentEndDate)
           AND pr.organizationId = @organizationId
-          ${repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
-        GROUP BY pr._id, pr.closedAt, period
+          ${repository ? "AND pr.repo_full_name = @repository" : ""}
+        GROUP BY pr._id, pr.parsed_closed_at, period
         HAVING COUNT(c.commit_hash) > 0
       )
       SELECT
@@ -311,22 +311,22 @@ export class DeveloperProductivityService extends BigQueryBaseService {
     const query = `
       WITH pr_lead_times AS (
         SELECT
-          TIMESTAMP_TRUNC(SAFE_CAST(pr.closedAt AS TIMESTAMP), WEEK(MONDAY)) AS week_start,
+          TIMESTAMP_TRUNC(pr.parsed_closed_at, WEEK(MONDAY)) AS week_start,
           TIMESTAMP_DIFF(
-            SAFE_CAST(pr.closedAt AS TIMESTAMP),
+            pr.parsed_closed_at,
             SAFE_CAST(MIN(JSON_VALUE(c.commit_timestamp)) AS TIMESTAMP),
             MINUTE
           ) AS lead_time_minutes
-        FROM ${this.getTablePath("MONGO", "pullRequests")} AS pr
+        FROM ${this.getTablePath("MONGO", "pullRequests_opt")} AS pr
         JOIN ${this.getTablePath("MONGO", "commits_view")} AS c
           ON pr._id = c.pull_request_id
         WHERE pr.closedAt IS NOT NULL AND pr.closedAt <> ''
           AND pr.status = 'closed'
-          AND SAFE_CAST(pr.closedAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
-          AND SAFE_CAST(pr.closedAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
+          AND pr.parsed_closed_at >= TIMESTAMP(@startDate)
+          AND pr.parsed_closed_at <= TIMESTAMP(@endDate)
           AND pr.organizationId = @organizationId
-          ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
-        GROUP BY pr._id, pr.closedAt
+          ${params.repository ? "AND pr.repo_full_name = @repository" : ""}
+        GROUP BY pr._id, pr.parsed_closed_at
         HAVING COUNT(c.commit_hash) > 0
       )
       SELECT
@@ -373,17 +373,17 @@ export class DeveloperProductivityService extends BigQueryBaseService {
       WITH pr_sizes AS (
         SELECT
           CASE
-            WHEN SAFE_CAST(pr.closedAt AS TIMESTAMP) BETWEEN TIMESTAMP(@currentStartDate) AND TIMESTAMP(@currentEndDate)
+            WHEN pr.parsed_closed_at BETWEEN TIMESTAMP(@currentStartDate) AND TIMESTAMP(@currentEndDate)
             THEN 'current'
             ELSE 'previous'
           END as period,
           pr.totalChanges as pr_size
-        FROM ${this.getTablePath("MONGO", "pullRequests")} AS pr
+        FROM ${this.getTablePath("MONGO", "pullRequests_opt")} AS pr
         WHERE pr.closedAt IS NOT NULL AND pr.closedAt <> ''
           AND pr.status = 'closed'
-          AND SAFE_CAST(pr.closedAt AS TIMESTAMP) BETWEEN TIMESTAMP(@previousStartDate) AND TIMESTAMP(@currentEndDate)
+          AND pr.parsed_closed_at BETWEEN TIMESTAMP(@previousStartDate) AND TIMESTAMP(@currentEndDate)
           AND pr.organizationId = @organizationId
-          ${repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
+          ${repository ? "AND pr.repo_full_name = @repository" : ""}
       )
       SELECT
         period,
@@ -469,18 +469,18 @@ export class DeveloperProductivityService extends BigQueryBaseService {
     const query = `
       WITH pr_weekly AS (
         SELECT
-          TIMESTAMP_TRUNC(SAFE_CAST(pr.closedAt AS TIMESTAMP), WEEK(MONDAY)) AS week_start,
+          TIMESTAMP_TRUNC(pr.parsed_closed_at, WEEK(MONDAY)) AS week_start,
           JSON_VALUE(auth.author_username) AS author,
           COUNT(pr._id) AS pr_count
-        FROM ${this.getTablePath("MONGO", "pullRequests")} AS pr
+        FROM ${this.getTablePath("MONGO", "pullRequests_opt")} AS pr
         JOIN ${this.getTablePath("MONGO", "pull_request_author_view")} AS auth
           ON pr._id = auth.pull_request_id
         WHERE pr.closedAt IS NOT NULL AND pr.closedAt <> ''
           AND pr.status = 'closed'
-          AND SAFE_CAST(pr.closedAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
-          AND SAFE_CAST(pr.closedAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
+          AND pr.parsed_closed_at >= TIMESTAMP(@startDate)
+          AND pr.parsed_closed_at <= TIMESTAMP(@endDate)
           AND pr.organizationId = @organizationId
-          ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
+          ${params.repository ? "AND pr.repo_full_name = @repository" : ""}
         GROUP BY week_start, author
       )
       SELECT
@@ -514,27 +514,27 @@ export class DeveloperProductivityService extends BigQueryBaseService {
     const query = `
       WITH open_prs AS (
         SELECT
-          TIMESTAMP_TRUNC(SAFE_CAST(pr.createdAt AS TIMESTAMP), WEEK(MONDAY)) AS week_start,
+          TIMESTAMP_TRUNC(pr.parsed_created_at, WEEK(MONDAY)) AS week_start,
           COUNT(*) AS opened_count
-        FROM ${this.getTablePath("MONGO", "pullRequests")} AS pr
+        FROM ${this.getTablePath("MONGO", "pullRequests_opt")} AS pr
         WHERE pr.createdAt IS NOT NULL
-          AND SAFE_CAST(pr.createdAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
-          AND SAFE_CAST(pr.createdAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
+          AND pr.parsed_created_at >= TIMESTAMP(@startDate)
+          AND pr.parsed_created_at <= TIMESTAMP(@endDate)
           AND pr.organizationId = @organizationId
-          ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
+          ${params.repository ? "AND pr.repo_full_name = @repository" : ""}
         GROUP BY week_start
       ),
       closed_prs AS (
         SELECT
-          TIMESTAMP_TRUNC(SAFE_CAST(pr.closedAt AS TIMESTAMP), WEEK(MONDAY)) AS week_start,
+          TIMESTAMP_TRUNC(pr.parsed_closed_at, WEEK(MONDAY)) AS week_start,
           COUNT(*) AS closed_count
-        FROM ${this.getTablePath("MONGO", "pullRequests")} AS pr
+        FROM ${this.getTablePath("MONGO", "pullRequests_opt")} AS pr
         WHERE pr.closedAt IS NOT NULL AND pr.closedAt <> ''
           AND pr.status = 'closed'
-          AND SAFE_CAST(pr.closedAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
-          AND SAFE_CAST(pr.closedAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
+          AND pr.parsed_closed_at >= TIMESTAMP(@startDate)
+          AND pr.parsed_closed_at <= TIMESTAMP(@endDate)
           AND pr.organizationId = @organizationId
-          ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
+          ${params.repository ? "AND pr.repo_full_name = @repository" : ""}
         GROUP BY week_start
       )
       SELECT
@@ -577,23 +577,23 @@ export class DeveloperProductivityService extends BigQueryBaseService {
         SELECT
           pr._id,
           SAFE_CAST(pr.openedAt AS TIMESTAMP) AS opened_at,
-          SAFE_CAST(pr.closedAt AS TIMESTAMP) AS closed_at,
-          TIMESTAMP_TRUNC(SAFE_CAST(pr.closedAt AS TIMESTAMP), WEEK(MONDAY)) AS week_start,
+          pr.parsed_closed_at AS closed_at,
+          TIMESTAMP_TRUNC(pr.parsed_closed_at, WEEK(MONDAY)) AS week_start,
           MIN(SAFE_CAST(JSON_VALUE(c.commit_timestamp) AS TIMESTAMP)) AS first_commit,
           MAX(SAFE_CAST(JSON_VALUE(c.commit_timestamp) AS TIMESTAMP)) AS last_commit
-        FROM ${this.getTablePath("MONGO", "pullRequests")} AS pr
+        FROM ${this.getTablePath("MONGO", "pullRequests_opt")} AS pr
         JOIN ${this.getTablePath("MONGO", "commits_view")} AS c
           ON pr._id = c.pull_request_id
         WHERE pr.closedAt IS NOT NULL AND pr.closedAt <> ''
           AND pr.status = 'closed'
-          AND SAFE_CAST(pr.closedAt AS TIMESTAMP) BETWEEN TIMESTAMP(@startDate) AND TIMESTAMP(@endDate)
+          AND pr.parsed_closed_at BETWEEN TIMESTAMP(@startDate) AND TIMESTAMP(@endDate)
           AND pr.organizationId = @organizationId
-          ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
+          ${params.repository ? "AND pr.repo_full_name = @repository" : ""}
         GROUP BY
           pr._id,
           SAFE_CAST(pr.openedAt AS TIMESTAMP),
-          SAFE_CAST(pr.closedAt AS TIMESTAMP),
-          TIMESTAMP_TRUNC(SAFE_CAST(pr.closedAt AS TIMESTAMP), WEEK(MONDAY))
+          pr.parsed_closed_at,
+          TIMESTAMP_TRUNC(pr.parsed_closed_at, WEEK(MONDAY))
       )
       SELECT
         FORMAT_TIMESTAMP('%Y-%m-%d', week_start) as week_start,
@@ -654,28 +654,28 @@ export class DeveloperProductivityService extends BigQueryBaseService {
           JSON_VALUE(c.commit_author) AS developer,
           COUNT(DISTINCT JSON_VALUE(c.commit_hash)) AS commit_count
         FROM ${this.getTablePath("MONGO", "commits_view")} AS c
-        JOIN ${this.getTablePath("MONGO", "pullRequests")} AS pr
+        JOIN ${this.getTablePath("MONGO", "pullRequests_opt")} AS pr
           ON c.pull_request_id = pr._id
         WHERE SAFE_CAST(JSON_VALUE(c.commit_timestamp) AS TIMESTAMP) BETWEEN TIMESTAMP(@startDate) AND TIMESTAMP(@endDate)
           AND JSON_VALUE(c.commit_author) IS NOT NULL
           AND TRIM(JSON_VALUE(c.commit_author)) != ''
           AND pr.organizationId = @organizationId
-          ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
+          ${params.repository ? "AND pr.repo_full_name = @repository" : ""}
         GROUP BY 
           activity_date,
           developer
       ),
       pr_activity AS (
         SELECT
-          FORMAT_DATE('%Y-%m-%d', DATE(TIMESTAMP(pr.createdAt))) AS activity_date,
+          FORMAT_DATE('%Y-%m-%d', DATE(pr.parsed_created_at)) AS activity_date,
           JSON_VALUE(auth.author_username) AS developer,
           COUNT(pr._id) AS pr_count
-        FROM ${this.getTablePath("MONGO", "pullRequests")} AS pr
+        FROM ${this.getTablePath("MONGO", "pullRequests_opt")} AS pr
         JOIN ${this.getTablePath("MONGO", "pull_request_author_view")} AS auth
           ON pr._id = auth.pull_request_id
-        WHERE SAFE_CAST(pr.createdAt AS TIMESTAMP) BETWEEN TIMESTAMP(@startDate) AND TIMESTAMP(@endDate)
+        WHERE pr.parsed_created_at BETWEEN TIMESTAMP(@startDate) AND TIMESTAMP(@endDate)
           AND pr.organizationId = @organizationId
-          ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
+          ${params.repository ? "AND pr.repo_full_name = @repository" : ""}
           AND JSON_VALUE(auth.author_username) IS NOT NULL
           AND TRIM(JSON_VALUE(auth.author_username)) != ''
         GROUP BY 
@@ -742,10 +742,10 @@ export class DeveloperProductivityService extends BigQueryBaseService {
         FROM ${pullRequestsTable} AS pr
         WHERE pr.closedAt IS NOT NULL AND pr.closedAt <> ''
           AND pr.status = 'closed'
-          AND SAFE_CAST(pr.closedAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
-          AND SAFE_CAST(pr.closedAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
+          AND pr.parsed_closed_at >= TIMESTAMP(@startDate)
+          AND pr.parsed_closed_at <= TIMESTAMP(@endDate)
           AND pr.organizationId = @organizationId
-          ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
+          ${params.repository ? "AND pr.repo_full_name = @repository" : ""}
       ),
       critical_suggestions_metrics AS (
         -- 2. Critical suggestions
@@ -757,10 +757,10 @@ export class DeveloperProductivityService extends BigQueryBaseService {
         CROSS JOIN UNNEST(JSON_EXTRACT_ARRAY(file_obj, '$.suggestions')) AS sug
         WHERE pr.organizationId = @organizationId
           AND pr.closedAt IS NOT NULL AND pr.closedAt <> ''
-          AND SAFE_CAST(pr.closedAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
-          AND SAFE_CAST(pr.closedAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
+          AND pr.parsed_closed_at >= TIMESTAMP(@startDate)
+          AND pr.parsed_closed_at <= TIMESTAMP(@endDate)
           AND JSON_VALUE(sug, '$.deliveryStatus') = 'sent'
-          ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
+          ${params.repository ? "AND pr.repo_full_name = @repository" : ""}
       ),
       top_suggestions_categories AS (
         -- 4. Top 3 suggestions categories
@@ -773,10 +773,10 @@ export class DeveloperProductivityService extends BigQueryBaseService {
         CROSS JOIN UNNEST(JSON_EXTRACT_ARRAY(file_obj, '$.suggestions')) AS sug
         WHERE pr.organizationId = @organizationId
           AND pr.closedAt IS NOT NULL AND pr.closedAt <> ''
-          AND SAFE_CAST(pr.closedAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
-          AND SAFE_CAST(pr.closedAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
+          AND pr.parsed_closed_at >= TIMESTAMP(@startDate)
+          AND pr.parsed_closed_at <= TIMESTAMP(@endDate)
           AND JSON_VALUE(sug, '$.deliveryStatus') = 'sent'
-          ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
+          ${params.repository ? "AND pr.repo_full_name = @repository" : ""}
         GROUP BY category
         HAVING category IS NOT NULL
       ),
@@ -789,8 +789,8 @@ export class DeveloperProductivityService extends BigQueryBaseService {
         FROM ${pullRequestsTable} AS pr
         WHERE pr.closedAt IS NOT NULL AND pr.closedAt <> ''
           AND pr.status = 'closed'
-          AND SAFE_CAST(pr.closedAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
-          AND SAFE_CAST(pr.closedAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
+          AND pr.parsed_closed_at >= TIMESTAMP(@startDate)
+          AND pr.parsed_closed_at <= TIMESTAMP(@endDate)
       ),
       company_ranking AS (
         -- Ranking da empresa entre todas
@@ -801,8 +801,8 @@ export class DeveloperProductivityService extends BigQueryBaseService {
         FROM ${pullRequestsTable} AS pr
         WHERE pr.closedAt IS NOT NULL AND pr.closedAt <> ''
           AND pr.status = 'closed'
-          AND SAFE_CAST(pr.closedAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
-          AND SAFE_CAST(pr.closedAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
+          AND pr.parsed_closed_at >= TIMESTAMP(@startDate)
+          AND pr.parsed_closed_at <= TIMESTAMP(@endDate)
         GROUP BY pr.organizationId
       )
       
@@ -830,10 +830,10 @@ export class DeveloperProductivityService extends BigQueryBaseService {
              ON pr._id = auth.pull_request_id
            WHERE pr.closedAt IS NOT NULL AND pr.closedAt <> ''
              AND pr.status = 'closed'
-             AND SAFE_CAST(pr.closedAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
-             AND SAFE_CAST(pr.closedAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
+             AND pr.parsed_closed_at >= TIMESTAMP(@startDate)
+             AND pr.parsed_closed_at <= TIMESTAMP(@endDate)
              AND pr.organizationId = @organizationId
-             ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
+             ${params.repository ? "AND pr.repo_full_name = @repository" : ""}
            GROUP BY JSON_VALUE(auth.author_username)
            ORDER BY COUNT(pr._id) DESC
            LIMIT 1
@@ -845,10 +845,10 @@ export class DeveloperProductivityService extends BigQueryBaseService {
              ON pr._id = auth.pull_request_id
            WHERE pr.closedAt IS NOT NULL AND pr.closedAt <> ''
              AND pr.status = 'closed'
-             AND SAFE_CAST(pr.closedAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
-             AND SAFE_CAST(pr.closedAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
+             AND pr.parsed_closed_at >= TIMESTAMP(@startDate)
+             AND pr.parsed_closed_at <= TIMESTAMP(@endDate)
              AND pr.organizationId = @organizationId
-             ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
+             ${params.repository ? "AND pr.repo_full_name = @repository" : ""}
            GROUP BY JSON_VALUE(auth.author_username)
            ORDER BY COUNT(pr._id) DESC
            LIMIT 1

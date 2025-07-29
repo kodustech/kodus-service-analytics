@@ -198,7 +198,8 @@ router.get(
       const data = await developerProductivityService.getDeployFrequencyHighlight(
         organizationId as string,
         startDate as string,
-        endDate as string
+        endDate as string,
+        repository as string | undefined
       );
 
       return res.json({
