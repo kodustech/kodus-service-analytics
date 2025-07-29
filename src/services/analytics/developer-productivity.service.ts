@@ -21,6 +21,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
     organizationId: string;
     startDate: string;
     endDate: string;
+    repository?: string;
   }) {
     // Validação básica dos parâmetros
     if (!params.organizationId || !params.startDate || !params.endDate) {
@@ -46,6 +47,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
         AND SAFE_CAST(closedAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
         AND SAFE_CAST(closedAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
         AND organizationId = @organizationId
+        ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
       GROUP BY week_start
       ORDER BY week_start
     `;
@@ -54,6 +56,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
       startDate: params.startDate,
       endDate: params.endDate,
       organizationId: params.organizationId,
+      ...(params.repository && { repository: params.repository }),
     });
 
     return rows.map((row) => ({
@@ -65,7 +68,8 @@ export class DeveloperProductivityService extends BigQueryBaseService {
   async getDeployFrequencyHighlight(
     organizationId: string,
     startDate: string,
-    endDate: string
+    endDate: string,
+    repository?: string
   ): Promise<DeployFrequencyHighlight> {
     // Validação do formato das datas
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
@@ -102,6 +106,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
           AND DATE(closedAt) >= DATE(@currentStartDate)
           AND DATE(closedAt) <= DATE(@currentEndDate)
           AND organizationId = @organizationId
+          ${repository ? "AND JSON_VALUE(repository, '$.fullName') = @repository" : ""}
       ),
       previous_period AS (
         SELECT
@@ -113,6 +118,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
           AND DATE(closedAt) >= DATE(@previousStartDate)
           AND DATE(closedAt) <= DATE(@previousEndDate)
           AND organizationId = @organizationId
+          ${repository ? "AND JSON_VALUE(repository, '$.fullName') = @repository" : ""}
       )
       SELECT
         c.total_deployments as current_total_deployments,
@@ -129,6 +135,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
       previousStartDate: previousStartDate.toISOString().split("T")[0],
       previousEndDate: previousEndDate.toISOString().split("T")[0],
       organizationId,
+      ...(repository && { repository }),
     });
 
     const result = rows[0] || {
@@ -179,7 +186,8 @@ export class DeveloperProductivityService extends BigQueryBaseService {
   async getPullRequestLeadTimeHighlight(
     organizationId: string,
     startDate: string,
-    endDate: string
+    endDate: string,
+    repository?: string
   ): Promise<LeadTimeHighlight> {
     // Calculate the duration of the current period
     const currentStartDate = new Date(startDate);
@@ -213,6 +221,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
           AND pr.status = 'closed'
           AND SAFE_CAST(pr.closedAt AS TIMESTAMP) BETWEEN TIMESTAMP(@previousStartDate) AND TIMESTAMP(@currentEndDate)
           AND pr.organizationId = @organizationId
+          ${repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
         GROUP BY pr._id, pr.closedAt, period
         HAVING COUNT(c.commit_hash) > 0
       )
@@ -240,6 +249,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
       previousStartDate: previousStartDate.toISOString().split("T")[0],
       previousEndDate: previousEndDate.toISOString().split("T")[0],
       organizationId,
+      ...(repository && { repository }),
     });
 
     const result = rows[0] || {
@@ -296,6 +306,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
     organizationId: string;
     startDate: string;
     endDate: string;
+    repository?: string;
   }): Promise<LeadTimeChartData[]> {
     const query = `
       WITH pr_lead_times AS (
@@ -314,6 +325,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
           AND SAFE_CAST(pr.closedAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
           AND SAFE_CAST(pr.closedAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
           AND pr.organizationId = @organizationId
+          ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
         GROUP BY pr._id, pr.closedAt
         HAVING COUNT(c.commit_hash) > 0
       )
@@ -329,6 +341,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
       startDate: params.startDate,
       endDate: params.endDate,
       organizationId: params.organizationId,
+      ...(params.repository && { repository: params.repository }),
     });
 
     return rows.map((row) => ({
@@ -341,7 +354,8 @@ export class DeveloperProductivityService extends BigQueryBaseService {
   async getPullRequestSizeHighlight(
     organizationId: string,
     startDate: string,
-    endDate: string
+    endDate: string,
+    repository?: string
   ): Promise<PRSizeHighlight> {
     // Calculate the duration of the current period
     const currentStartDate = new Date(startDate);
@@ -369,6 +383,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
           AND pr.status = 'closed'
           AND SAFE_CAST(pr.closedAt AS TIMESTAMP) BETWEEN TIMESTAMP(@previousStartDate) AND TIMESTAMP(@currentEndDate)
           AND pr.organizationId = @organizationId
+          ${repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
       )
       SELECT
         period,
@@ -384,6 +399,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
       previousStartDate: previousStartDate.toISOString().split("T")[0],
       previousEndDate: previousEndDate.toISOString().split("T")[0],
       organizationId,
+      ...(repository && { repository }),
     });
 
     // Initialize default values
@@ -448,6 +464,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
     organizationId: string;
     startDate: string;
     endDate: string;
+    repository?: string;
   }): Promise<PullRequestsByDevChartData[]> {
     const query = `
       WITH pr_weekly AS (
@@ -463,6 +480,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
           AND SAFE_CAST(pr.closedAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
           AND SAFE_CAST(pr.closedAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
           AND pr.organizationId = @organizationId
+          ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
         GROUP BY week_start, author
       )
       SELECT
@@ -477,6 +495,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
       startDate: params.startDate,
       endDate: params.endDate,
       organizationId: params.organizationId,
+      ...(params.repository && { repository: params.repository }),
     });
 
     return rows.map((row) => ({
@@ -490,6 +509,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
     organizationId: string;
     startDate: string;
     endDate: string;
+    repository?: string;
   }): Promise<PullRequestsOpenedVsClosedData[]> {
     const query = `
       WITH open_prs AS (
@@ -501,6 +521,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
           AND SAFE_CAST(pr.createdAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
           AND SAFE_CAST(pr.createdAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
           AND pr.organizationId = @organizationId
+          ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
         GROUP BY week_start
       ),
       closed_prs AS (
@@ -513,6 +534,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
           AND SAFE_CAST(pr.closedAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
           AND SAFE_CAST(pr.closedAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
           AND pr.organizationId = @organizationId
+          ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
         GROUP BY week_start
       )
       SELECT
@@ -533,6 +555,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
       startDate: params.startDate,
       endDate: params.endDate,
       organizationId: params.organizationId,
+      ...(params.repository && { repository: params.repository }),
     });
 
     return rows.map((row) => ({
@@ -547,6 +570,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
     organizationId: string;
     startDate: string;
     endDate: string;
+    repository?: string;
   }): Promise<LeadTimeBreakdownData[]> {
     const query = `
       WITH pr_lead_times AS (
@@ -564,6 +588,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
           AND pr.status = 'closed'
           AND SAFE_CAST(pr.closedAt AS TIMESTAMP) BETWEEN TIMESTAMP(@startDate) AND TIMESTAMP(@endDate)
           AND pr.organizationId = @organizationId
+          ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
         GROUP BY
           pr._id,
           SAFE_CAST(pr.openedAt AS TIMESTAMP),
@@ -599,6 +624,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
       startDate: params.startDate,
       endDate: params.endDate,
       organizationId: params.organizationId,
+      ...(params.repository && { repository: params.repository }),
     });
 
     return rows.map((row) => ({
@@ -619,6 +645,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
     organizationId: string;
     startDate: string;
     endDate: string;
+    repository?: string;
   }): Promise<DeveloperActivityData[]> {
     const query = `
       WITH commit_activity AS (
@@ -633,6 +660,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
           AND JSON_VALUE(c.commit_author) IS NOT NULL
           AND TRIM(JSON_VALUE(c.commit_author)) != ''
           AND pr.organizationId = @organizationId
+          ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
         GROUP BY 
           activity_date,
           developer
@@ -647,6 +675,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
           ON pr._id = auth.pull_request_id
         WHERE SAFE_CAST(pr.createdAt AS TIMESTAMP) BETWEEN TIMESTAMP(@startDate) AND TIMESTAMP(@endDate)
           AND pr.organizationId = @organizationId
+          ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
           AND JSON_VALUE(auth.author_username) IS NOT NULL
           AND TRIM(JSON_VALUE(auth.author_username)) != ''
         GROUP BY 
@@ -672,6 +701,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
       startDate: params.startDate,
       endDate: params.endDate,
       organizationId: params.organizationId,
+      ...(params.repository && { repository: params.repository }),
     });
 
     return rows.map((row) => ({
@@ -689,6 +719,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
     organizationId: string;
     startDate: string;
     endDate: string;
+    repository?: string;
   }): Promise<CompanyDashboard> {
     // Validação básica dos parâmetros
     if (!params.organizationId || !params.startDate || !params.endDate) {
@@ -714,6 +745,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
           AND SAFE_CAST(pr.closedAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
           AND SAFE_CAST(pr.closedAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
           AND pr.organizationId = @organizationId
+          ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
       ),
       critical_suggestions_metrics AS (
         -- 2. Critical suggestions
@@ -728,6 +760,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
           AND SAFE_CAST(pr.closedAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
           AND SAFE_CAST(pr.closedAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
           AND JSON_VALUE(sug, '$.deliveryStatus') = 'sent'
+          ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
       ),
       top_suggestions_categories AS (
         -- 4. Top 3 suggestions categories
@@ -743,6 +776,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
           AND SAFE_CAST(pr.closedAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
           AND SAFE_CAST(pr.closedAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
           AND JSON_VALUE(sug, '$.deliveryStatus') = 'sent'
+          ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
         GROUP BY category
         HAVING category IS NOT NULL
       ),
@@ -799,6 +833,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
              AND SAFE_CAST(pr.closedAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
              AND SAFE_CAST(pr.closedAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
              AND pr.organizationId = @organizationId
+             ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
            GROUP BY JSON_VALUE(auth.author_username)
            ORDER BY COUNT(pr._id) DESC
            LIMIT 1
@@ -813,6 +848,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
              AND SAFE_CAST(pr.closedAt AS TIMESTAMP) >= TIMESTAMP(@startDate)
              AND SAFE_CAST(pr.closedAt AS TIMESTAMP) <= TIMESTAMP(@endDate)
              AND pr.organizationId = @organizationId
+             ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
            GROUP BY JSON_VALUE(auth.author_username)
            ORDER BY COUNT(pr._id) DESC
            LIMIT 1
@@ -834,6 +870,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
       startDate: params.startDate,
       endDate: params.endDate,
       organizationId: params.organizationId,
+      ...(params.repository && { repository: params.repository }),
     });
 
     const result = rows[0] || {};
@@ -893,6 +930,7 @@ export class DeveloperProductivityService extends BigQueryBaseService {
     organizationId: string;
     startDate: string;
     endDate: string;
+    repository?: string;
   }): Promise<CompanyDashboard> {
     const codeHealthService = new CodeHealthService();
     
@@ -912,12 +950,14 @@ export class DeveloperProductivityService extends BigQueryBaseService {
       this.getPullRequestLeadTimeHighlight(
         params.organizationId,
         params.startDate,
-        params.endDate
+        params.endDate,
+        params.repository
       ),
       this.getDeployFrequencyHighlight(
         params.organizationId,
         params.startDate,
-        params.endDate
+        params.endDate,
+        params.repository
       ),
       codeHealthService.getBugRatioHighlight({
         organizationId: params.organizationId,

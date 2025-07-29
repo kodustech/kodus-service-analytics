@@ -14,19 +14,21 @@ export class CodeHealthService extends BigQueryBaseService {
     organizationId: string;
     startDate: string;
     endDate: string;
+    repository?: string;
   }): Promise<SuggestionCategoryCount[]> {
     const query = `
           SELECT
             JSON_VALUE(sug, '$.label') AS suggestion_category,
             COUNT(*) AS suggestions_count
-          FROM ${this.getTablePath("MONGO", "pullRequests")}
-          CROSS JOIN UNNEST(JSON_EXTRACT_ARRAY(files)) AS file_obj
+          FROM ${this.getTablePath("MONGO", "pullRequests")} AS pr
+          CROSS JOIN UNNEST(JSON_EXTRACT_ARRAY(pr.files)) AS file_obj
           CROSS JOIN UNNEST(JSON_EXTRACT_ARRAY(file_obj, '$.suggestions')) AS sug
-          WHERE organizationId = @organizationId
-            AND closedAt IS NOT NULL 
-            AND closedAt <> ''
-            AND TIMESTAMP(closedAt) BETWEEN TIMESTAMP(@startDate) AND TIMESTAMP(@endDate)
+          WHERE pr.organizationId = @organizationId
+            AND pr.closedAt IS NOT NULL 
+            AND pr.closedAt <> ''
+            AND TIMESTAMP(pr.closedAt) BETWEEN TIMESTAMP(@startDate) AND TIMESTAMP(@endDate)
             AND JSON_VALUE(sug, '$.deliveryStatus') = 'sent'
+            ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
           GROUP BY suggestion_category
           ORDER BY suggestions_count DESC;
         `;
@@ -35,6 +37,7 @@ export class CodeHealthService extends BigQueryBaseService {
       startDate: params.startDate,
       endDate: params.endDate,
       organizationId: params.organizationId,
+      ...(params.repository && { repository: params.repository }),
     });
 
     return rows.map((row) => ({
@@ -47,11 +50,12 @@ export class CodeHealthService extends BigQueryBaseService {
     organizationId: string;
     startDate: string;
     endDate: string;
+    repository?: string;
   }): Promise<RepositorySuggestions[]> {
     const query = `
           WITH repo_suggestions AS (
             SELECT
-              JSON_VALUE(pr.repository, '$.name') AS repository,
+              JSON_VALUE(pr.repository, '$.fullName') AS repository,
               JSON_VALUE(sug, '$.label') AS suggestion_category,
               COUNT(*) AS suggestions_count
             FROM ${this.getTablePath("MONGO", "pullRequests")} AS pr
@@ -62,6 +66,7 @@ export class CodeHealthService extends BigQueryBaseService {
               AND pr.closedAt <> ''
               AND TIMESTAMP(pr.closedAt) BETWEEN TIMESTAMP(@startDate) AND TIMESTAMP(@endDate)
               AND JSON_VALUE(sug, '$.deliveryStatus') = 'sent'
+              ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
             GROUP BY repository, suggestion_category
           )
           SELECT
@@ -80,6 +85,7 @@ export class CodeHealthService extends BigQueryBaseService {
       startDate: params.startDate,
       endDate: params.endDate,
       organizationId: params.organizationId,
+      ...(params.repository && { repository: params.repository }),
     });
 
     return rows.map((row) => ({
@@ -96,6 +102,7 @@ export class CodeHealthService extends BigQueryBaseService {
     organizationId: string;
     startDate: string;
     endDate: string;
+    repository?: string;
   }): Promise<BugRatioData[]> {
     const pullRequestsTable = this.getTablePath("MONGO", TABLES.PULL_REQUESTS);
     const prTypesTable = this.getTablePath(
@@ -117,6 +124,7 @@ export class CodeHealthService extends BigQueryBaseService {
           AND pr.status = 'closed'
           AND TIMESTAMP(pr.closedAt) BETWEEN TIMESTAMP(@startDate) AND TIMESTAMP(@endDate)
           AND pr.organizationId = @organizationId
+          ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
         GROUP BY week_start
       )
       SELECT
@@ -132,6 +140,7 @@ export class CodeHealthService extends BigQueryBaseService {
       startDate: params.startDate,
       endDate: params.endDate,
       organizationId: params.organizationId,
+      ...(params.repository && { repository: params.repository }),
     });
 
     return rows.map((row) => ({
@@ -146,6 +155,7 @@ export class CodeHealthService extends BigQueryBaseService {
     organizationId: string;
     startDate: string;
     endDate: string;
+    repository?: string;
   }): Promise<BugRatioHighlight> {
     const pullRequestsTable = this.getTablePath("MONGO", TABLES.PULL_REQUESTS);
     const prTypesTable = this.getTablePath(
@@ -186,6 +196,7 @@ export class CodeHealthService extends BigQueryBaseService {
           AND pr.status = 'closed'
           AND DATE(TIMESTAMP(pr.closedAt)) BETWEEN DATE(@startDate) AND DATE(@endDate)
           AND pr.organizationId = @organizationId
+          ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
       ),
       previous_period AS (
         SELECT
@@ -199,6 +210,7 @@ export class CodeHealthService extends BigQueryBaseService {
           AND pr.status = 'closed'
           AND DATE(TIMESTAMP(pr.closedAt)) BETWEEN DATE(@previousStartDate) AND DATE(@previousEndDate)
           AND pr.organizationId = @organizationId
+          ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""}
       )
       SELECT
         c.total_prs as current_total_prs,
@@ -220,6 +232,7 @@ export class CodeHealthService extends BigQueryBaseService {
       previousStartDate: previousStartDate.toISOString().split("T")[0],
       previousEndDate: previousEndDate.toISOString().split("T")[0],
       organizationId: params.organizationId,
+      ...(params.repository && { repository: params.repository }),
     });
 
     // Debug log para os resultados
@@ -280,6 +293,7 @@ export class CodeHealthService extends BigQueryBaseService {
 
   async getSuggestionsImplementationRate(params: {
     organizationId: string;
+    repository?: string;
   }): Promise<SuggestionsImplementationRate> {
     const suggestionsViewTable = this.getTablePath(
       "MONGO",
@@ -311,11 +325,13 @@ INNER JOIN ${organizationTable} as o
   ON o.uuid = pr.organizationId
 WHERE sv.suggestionDeliveryStatus = 'sent'
   AND o.uuid = @organizationId
-  AND DATE(TIMESTAMP(suggestionCreatedAt)) >= DATE_SUB(CURRENT_DATE(), INTERVAL 2 WEEK);
+  AND DATE(TIMESTAMP(suggestionCreatedAt)) >= DATE_SUB(CURRENT_DATE(), INTERVAL 2 WEEK)
+  ${params.repository ? "AND JSON_VALUE(pr.repository, '$.fullName') = @repository" : ""};
 `;
 
     const rows = await this.executeQuery(query, {
       organizationId: params.organizationId,
+      ...(params.repository && { repository: params.repository }),
     });
 
     return {
