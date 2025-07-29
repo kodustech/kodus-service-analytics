@@ -1,11 +1,11 @@
 // Constantes para as tabelas
 export const TABLES = {
-  PULL_REQUESTS: "pullRequests",
+  PULL_REQUESTS: "pullRequests_opt",
   DEPLOYMENTS: "deployments",
   ISSUES: "issues",
   PULL_REQUEST_TYPES: "pull_request_types",
   ORGANIZATION: "organizations",
-  SUGGESTIONS_VIEW: "suggestions_view",
+  SUGGESTIONS_VIEW_VM: "suggestions_mv",
 } as const;
 
 export interface QueryParams {
