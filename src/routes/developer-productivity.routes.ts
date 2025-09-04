@@ -73,32 +73,31 @@ router.use(cacheMiddleware(900));
  *         description: Erro interno do servidor
  */
 router.get("/charts/deploy-frequency", async (req, res, next) => {
-  try {
-    const { organizationId, startDate, endDate, repository } = req.query;
+    try {
+        const { organizationId, startDate, endDate, repository } = req.query;
 
-    if (!organizationId || !startDate || !endDate) {
-      return res.status(400).json({
-        status: "error",
-        message:
-          "Missing required parameters: organizationId, startDate, endDate",
-      });
+        if (!organizationId || !startDate || !endDate) {
+            return res.status(400).json({
+                status: "error",
+                message:
+                    "Missing required parameters: organizationId, startDate, endDate",
+            });
+        }
+
+        const data =
+            await developerProductivityService.getDeployFrequencyChartData({
+                organizationId: organizationId as string,
+                startDate: startDate as string,
+                endDate: endDate as string,
+            });
+
+        res.json({
+            status: "success",
+            data,
+        });
+    } catch (error) {
+        next(error);
     }
-
-    const data = await developerProductivityService.getDeployFrequencyChartData(
-      {
-        organizationId: organizationId as string,
-        startDate: startDate as string,
-        endDate: endDate as string,
-      }
-    );
-
-    res.json({
-      status: "success",
-      data,
-    });
-  } catch (error) {
-    next(error);
-  }
 });
 
 /**
@@ -184,33 +183,35 @@ router.get("/charts/deploy-frequency", async (req, res, next) => {
  *         description: Erro interno do servidor
  */
 router.get(
-  "/highlights/deploy-frequency",
-  async (req: Request, res: Response) => {
-    try {
-      const { organizationId, startDate, endDate, repository } = req.query;
+    "/highlights/deploy-frequency",
+    async (req: Request, res: Response) => {
+        try {
+            const { organizationId, startDate, endDate, repository } =
+                req.query;
 
-      if (!organizationId || !startDate || !endDate) {
-        return res.status(400).json({
-          error: "Missing required parameters: organizationId, startDate, endDate",
-        });
-      }
+            if (!organizationId || !startDate || !endDate) {
+                return res.status(400).json({
+                    error: "Missing required parameters: organizationId, startDate, endDate",
+                });
+            }
 
-      const data = await developerProductivityService.getDeployFrequencyHighlight(
-        organizationId as string,
-        startDate as string,
-        endDate as string,
-        repository as string | undefined
-      );
+            const data =
+                await developerProductivityService.getDeployFrequencyHighlight(
+                    organizationId as string,
+                    startDate as string,
+                    endDate as string,
+                    repository as string | undefined
+                );
 
-      return res.json({
-        status: "success",
-        data,
-      });
-    } catch (error) {
-      console.error("Error fetching deploy frequency highlight:", error);
-      return res.status(500).json({ error: "Internal server error" });
+            return res.json({
+                status: "success",
+                data,
+            });
+        } catch (error) {
+            console.error("Error fetching deploy frequency highlight:", error);
+            return res.status(500).json({ error: "Internal server error" });
+        }
     }
-  }
 );
 
 /**
@@ -296,34 +297,35 @@ router.get(
  *         description: Erro interno do servidor
  */
 router.get(
-  "/highlights/lead-time-for-change",
-  async (req: Request, res: Response) => {
-    try {
-      const { organizationId, startDate, endDate, repository } = req.query;
+    "/highlights/lead-time-for-change",
+    async (req: Request, res: Response) => {
+        try {
+            const { organizationId, startDate, endDate, repository } =
+                req.query;
 
-      if (!organizationId || !startDate || !endDate) {
-        return res.status(400).json({
-          error:
-            "Missing required parameters: organizationId, startDate, endDate",
-        });
-      }
+            if (!organizationId || !startDate || !endDate) {
+                return res.status(400).json({
+                    error: "Missing required parameters: organizationId, startDate, endDate",
+                });
+            }
 
-      const data = await developerProductivityService.getPullRequestLeadTimeHighlight(
-        organizationId as string,
-        startDate as string,
-        endDate as string,
-        repository as string | undefined
-      );
+            const data =
+                await developerProductivityService.getPullRequestLeadTimeHighlight(
+                    organizationId as string,
+                    startDate as string,
+                    endDate as string,
+                    repository as string | undefined
+                );
 
-      return res.json({
-        status: "success",
-        data,
-      });
-    } catch (error) {
-      console.error("Error fetching PR lead time:", error);
-      return res.status(500).json({ error: "Internal server error" });
+            return res.json({
+                status: "success",
+                data,
+            });
+        } catch (error) {
+            console.error("Error fetching PR lead time:", error);
+            return res.status(500).json({ error: "Internal server error" });
+        }
     }
-  }
 );
 
 /**
@@ -387,34 +389,35 @@ router.get(
  *         description: Erro interno do servidor
  */
 router.get(
-  "/charts/lead-time-for-change",
-  async (req: Request, res: Response) => {
-    try {
-      const { organizationId, startDate, endDate, repository } = req.query;
+    "/charts/lead-time-for-change",
+    async (req: Request, res: Response) => {
+        try {
+            const { organizationId, startDate, endDate, repository } =
+                req.query;
 
-      if (!organizationId || !startDate || !endDate) {
-        return res.status(400).json({
-          error:
-            "Missing required parameters: organizationId, startDate, endDate",
-        });
-      }
+            if (!organizationId || !startDate || !endDate) {
+                return res.status(400).json({
+                    error: "Missing required parameters: organizationId, startDate, endDate",
+                });
+            }
 
-      const data = await developerProductivityService.getLeadTimeChartData({
-        organizationId: organizationId as string,
-        startDate: startDate as string,
-        endDate: endDate as string,
-        repository: repository as string | undefined,
-      });
+            const data =
+                await developerProductivityService.getLeadTimeChartData({
+                    organizationId: organizationId as string,
+                    startDate: startDate as string,
+                    endDate: endDate as string,
+                    repository: repository as string | undefined,
+                });
 
-      return res.json({
-        status: "success",
-        data,
-      });
-    } catch (error) {
-      console.error("Error fetching lead time chart data:", error);
-      return res.status(500).json({ error: "Internal server error" });
+            return res.json({
+                status: "success",
+                data,
+            });
+        } catch (error) {
+            console.error("Error fetching lead time chart data:", error);
+            return res.status(500).json({ error: "Internal server error" });
+        }
     }
-  }
 );
 
 /**
@@ -500,31 +503,31 @@ router.get(
  *         description: Erro interno do servidor
  */
 router.get("/highlights/pr-size", async (req: Request, res: Response) => {
-  try {
-    const { organizationId, startDate, endDate, repository } = req.query;
+    try {
+        const { organizationId, startDate, endDate, repository } = req.query;
 
-    if (!organizationId || !startDate || !endDate) {
-      return res.status(400).json({
-        error:
-          "Missing required parameters: organizationId, startDate, endDate",
-      });
+        if (!organizationId || !startDate || !endDate) {
+            return res.status(400).json({
+                error: "Missing required parameters: organizationId, startDate, endDate",
+            });
+        }
+
+        const data =
+            await developerProductivityService.getPullRequestSizeHighlight(
+                organizationId as string,
+                startDate as string,
+                endDate as string,
+                repository as string | undefined
+            );
+
+        return res.json({
+            status: "success",
+            data,
+        });
+    } catch (error) {
+        console.error("Error fetching PR size metrics:", error);
+        return res.status(500).json({ error: "Internal server error" });
     }
-
-    const data = await developerProductivityService.getPullRequestSizeHighlight(
-      organizationId as string,
-      startDate as string,
-      endDate as string,
-      repository as string | undefined
-    );
-
-    return res.json({
-      status: "success",
-      data,
-    });
-  } catch (error) {
-    console.error("Error fetching PR size metrics:", error);
-    return res.status(500).json({ error: "Internal server error" });
-  }
 });
 
 /**
@@ -588,35 +591,37 @@ router.get("/highlights/pr-size", async (req: Request, res: Response) => {
  *         description: Erro interno do servidor
  */
 router.get(
-  "/charts/pull-requests-by-developer",
-  async (req: Request, res: Response) => {
-    try {
-      const { organizationId, startDate, endDate, repository } = req.query;
+    "/charts/pull-requests-by-developer",
+    async (req: Request, res: Response) => {
+        try {
+            const { organizationId, startDate, endDate, repository } =
+                req.query;
 
-      if (!organizationId || !startDate || !endDate) {
-        return res.status(400).json({
-          error:
-            "Missing required parameters: organizationId, startDate, endDate",
-        });
-      }
+            if (!organizationId || !startDate || !endDate) {
+                return res.status(400).json({
+                    error: "Missing required parameters: organizationId, startDate, endDate",
+                });
+            }
 
-      const data =
-        await developerProductivityService.getPullRequestsByDevChartData({
-          organizationId: organizationId as string,
-          startDate: startDate as string,
-          endDate: endDate as string,
-          repository: repository as string | undefined,
-          });
+            const data =
+                await developerProductivityService.getPullRequestsByDevChartData(
+                    {
+                        organizationId: organizationId as string,
+                        startDate: startDate as string,
+                        endDate: endDate as string,
+                        repository: repository as string | undefined,
+                    }
+                );
 
-      return res.json({
-        status: "success",
-        data,
-      });
-    } catch (error) {
-      console.error("Error fetching PRs by dev chart data:", error);
-      return res.status(500).json({ error: "Internal server error" });
+            return res.json({
+                status: "success",
+                data,
+            });
+        } catch (error) {
+            console.error("Error fetching PRs by dev chart data:", error);
+            return res.status(500).json({ error: "Internal server error" });
+        }
     }
-  }
 );
 
 /**
@@ -682,35 +687,37 @@ router.get(
  *         description: Erro interno do servidor
  */
 router.get(
-  "/charts/pull-requests-opened-vs-closed",
-  async (req: Request, res: Response) => {
-    try {
-      const { organizationId, startDate, endDate, repository } = req.query;
+    "/charts/pull-requests-opened-vs-closed",
+    async (req: Request, res: Response) => {
+        try {
+            const { organizationId, startDate, endDate, repository } =
+                req.query;
 
-      if (!organizationId || !startDate || !endDate) {
-        return res.status(400).json({
-          error:
-            "Missing required parameters: organizationId, startDate, endDate",
-        });
-      }
+            if (!organizationId || !startDate || !endDate) {
+                return res.status(400).json({
+                    error: "Missing required parameters: organizationId, startDate, endDate",
+                });
+            }
 
-      const data =
-        await developerProductivityService.getPullRequestsOpenedVsClosedData({
-          organizationId: organizationId as string,
-          startDate: startDate as string,
-          endDate: endDate as string,
-          repository: repository as string | undefined,
-          });
+            const data =
+                await developerProductivityService.getPullRequestsOpenedVsClosedData(
+                    {
+                        organizationId: organizationId as string,
+                        startDate: startDate as string,
+                        endDate: endDate as string,
+                        repository: repository as string | undefined,
+                    }
+                );
 
-      return res.json({
-        status: "success",
-        data,
-      });
-    } catch (error) {
-      console.error("Error fetching PRs opened vs closed data:", error);
-      return res.status(500).json({ error: "Internal server error" });
+            return res.json({
+                status: "success",
+                data,
+            });
+        } catch (error) {
+            console.error("Error fetching PRs opened vs closed data:", error);
+            return res.status(500).json({ error: "Internal server error" });
+        }
     }
-  }
 );
 
 /**
@@ -774,34 +781,35 @@ router.get(
  *         description: Erro interno do servidor
  */
 router.get(
-  "/charts/lead-time-breakdown",
-  async (req: Request, res: Response) => {
-    try {
-      const { organizationId, startDate, endDate, repository } = req.query;
+    "/charts/lead-time-breakdown",
+    async (req: Request, res: Response) => {
+        try {
+            const { organizationId, startDate, endDate, repository } =
+                req.query;
 
-      if (!organizationId || !startDate || !endDate) {
-        return res.status(400).json({
-          error:
-            "Missing required parameters: organizationId, startDate, endDate",
-        });
-      }
+            if (!organizationId || !startDate || !endDate) {
+                return res.status(400).json({
+                    error: "Missing required parameters: organizationId, startDate, endDate",
+                });
+            }
 
-      const data = await developerProductivityService.getLeadTimeBreakdownData({
-        organizationId: organizationId as string,
-        startDate: startDate as string,
-        endDate: endDate as string,
-        repository: repository as string | undefined,
-      });
+            const data =
+                await developerProductivityService.getLeadTimeBreakdownData({
+                    organizationId: organizationId as string,
+                    startDate: startDate as string,
+                    endDate: endDate as string,
+                    repository: repository as string | undefined,
+                });
 
-      return res.json({
-        status: "success",
-        data,
-      });
-    } catch (error) {
-      console.error("Error fetching lead time breakdown data:", error);
-      return res.status(500).json({ error: "Internal server error" });
+            return res.json({
+                status: "success",
+                data,
+            });
+        } catch (error) {
+            console.error("Error fetching lead time breakdown data:", error);
+            return res.status(500).json({ error: "Internal server error" });
+        }
     }
-  }
 );
 
 /**
@@ -869,34 +877,35 @@ router.get(
  *         description: Erro interno do servidor
  */
 router.get(
-  "/charts/developer-activity",
-  async (req: Request, res: Response) => {
-    try {
-      const { organizationId, startDate, endDate, repository } = req.query;
+    "/charts/developer-activity",
+    async (req: Request, res: Response) => {
+        try {
+            const { organizationId, startDate, endDate, repository } =
+                req.query;
 
-      if (!organizationId || !startDate || !endDate) {
-        return res.status(400).json({
-          error:
-            "Missing required parameters: organizationId, startDate, endDate",
-        });
-      }
+            if (!organizationId || !startDate || !endDate) {
+                return res.status(400).json({
+                    error: "Missing required parameters: organizationId, startDate, endDate",
+                });
+            }
 
-      const data = await developerProductivityService.getDeveloperActivityData({
-        organizationId: organizationId as string,
-        startDate: startDate as string,
-        endDate: endDate as string,
-        repository: repository as string | undefined,
-      });
+            const data =
+                await developerProductivityService.getDeveloperActivityData({
+                    organizationId: organizationId as string,
+                    startDate: startDate as string,
+                    endDate: endDate as string,
+                    repository: repository as string | undefined,
+                });
 
-      return res.json({
-        status: "success",
-        data,
-      });
-    } catch (error) {
-      console.error("Error fetching developer activity data:", error);
-      return res.status(500).json({ error: "Internal server error" });
+            return res.json({
+                status: "success",
+                data,
+            });
+        } catch (error) {
+            console.error("Error fetching developer activity data:", error);
+            return res.status(500).json({ error: "Internal server error" });
+        }
     }
-  }
 );
 
 /**
@@ -1027,43 +1036,41 @@ router.get(
  *       500:
  *         description: Erro interno do servidor
  */
-router.get(
-  "/dashboard/company",
-  async (req: Request, res: Response) => {
+router.get("/dashboard/company", async (req: Request, res: Response) => {
     try {
-      const { organizationId, startDate, endDate, repository, complete } = req.query;
+        const { organizationId, startDate, endDate, repository, complete } =
+            req.query;
 
-      if (!organizationId || !startDate || !endDate) {
-        return res.status(400).json({
-          error: "Missing required parameters: organizationId, startDate, endDate",
-        });
-      }
+        if (!organizationId || !startDate || !endDate) {
+            return res.status(400).json({
+                error: "Missing required parameters: organizationId, startDate, endDate",
+            });
+        }
 
-      const isComplete = complete === 'true';
+        const isComplete = complete === "true";
 
-      const data = isComplete
-        ? await developerProductivityService.getCompleteDashboard({
-            organizationId: organizationId as string,
-            startDate: startDate as string,
-            endDate: endDate as string,
-            repository: repository as string | undefined,
+        const data = isComplete
+            ? await developerProductivityService.getCompleteDashboard({
+                  organizationId: organizationId as string,
+                  startDate: startDate as string,
+                  endDate: endDate as string,
+                  repository: repository as string | undefined,
               })
-        : await developerProductivityService.getCompanyDashboard({
-            organizationId: organizationId as string,
-            startDate: startDate as string,
-            endDate: endDate as string,
-            repository: repository as string | undefined,
+            : await developerProductivityService.getCompanyDashboard({
+                  organizationId: organizationId as string,
+                  startDate: startDate as string,
+                  endDate: endDate as string,
+                  repository: repository as string | undefined,
               });
 
-      return res.json({
-        status: "success",
-        data,
-      });
+        return res.json({
+            status: "success",
+            data,
+        });
     } catch (error) {
-      console.error("Error fetching company dashboard:", error);
-      return res.status(500).json({ error: "Internal server error" });
+        console.error("Error fetching company dashboard:", error);
+        return res.status(500).json({ error: "Internal server error" });
     }
-  }
-);
+});
 
 export const developerProductivityRoutes = router;
