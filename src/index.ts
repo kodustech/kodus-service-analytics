@@ -29,6 +29,7 @@ const limiter = rateLimit({
 app.use(limiter);
 
 // Documentação Swagger (antes das rotas da API)
+// @ts-expect-error - @types/swagger-ui-express não é compatível com Express 5
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Health check routes (sem autenticação)
