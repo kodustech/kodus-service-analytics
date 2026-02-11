@@ -1,5 +1,5 @@
 import "dotenv/config";
-import express, { RequestHandler } from "express";
+import express from "express";
 import helmet from "helmet";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
@@ -29,7 +29,8 @@ const limiter = rateLimit({
 app.use(limiter);
 
 // Documentação Swagger (antes das rotas da API)
-app.use("/api-docs", swaggerUi.serve as unknown as RequestHandler, swaggerUi.setup(swaggerSpec) as unknown as RequestHandler);
+// @ts-expect-error - @types/swagger-ui-express não é compatível com Express 5
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Health check routes (sem autenticação)
 app.use("/health", healthRoutes);
